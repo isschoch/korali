@@ -129,7 +129,7 @@ plt.close()
 x = samples[:, 0]
 y = samples[:, 1]
 
-plt.hist2d(x, y, bins=50, density=True, cmap='plasma')
+plt.hist2d(x, y, bins=50, density=False, cmap='plasma')
 
 # Plot a colorbar with label.
 cb = plt.colorbar()
