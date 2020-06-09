@@ -46,6 +46,9 @@ def hamiltonian_mcmc_sample(U, grad_U, K, grad_K, mass_matrix, step_size, num_st
     p_proposed = p_proposed_evolution[:, num_steps-1]
     q_proposed = q_proposed_evolution[:, num_steps-1]
 
+    # negate proposed momentum to make proposal symmetric
+    p_proposed = -p_proposed
+
     # 3. Accept or reject proposed position in phase space ################################################
     q_next = q
     if accept_state_rule(q, q_proposed, p, p_proposed, U, K):
@@ -181,7 +184,7 @@ if __name__ == "__main__":
     #######################################################################################################
 
 
-    num_samples = 100
+    num_samples = 100000
 
     samples = hamiltonian_mcmc(q_init, data, num_samples, U, grad_U, K, grad_K)
 
