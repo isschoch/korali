@@ -211,9 +211,6 @@ def gaussian_2d_test():
     samples = hamiltonian_mcmc(q_init, num_samples, num_warmup_samples,
                                U, grad_U, K, grad_K, mass_matrix, step_size, num_steps, return_evolution)
 
-    # print("samples = ", samples)
-    # print("samples[0] = ", samples[0][1])
-    # print("samples[0, 1] = ", samples[0, 1])
     q_evolution = np.array(samples[0][1])
     p_evolution = np.array(samples[0][2])
 
@@ -221,19 +218,46 @@ def gaussian_2d_test():
     for i in range(num_steps):
         Hamiltonian_value[i] = K(p_evolution[:, i]) + U(q_evolution[:, i])
 
+    
+    #######################################################################################################
+    # Plotting Start ######################################################################################
+    #######################################################################################################
+
     if verbose:
         print("q_evolution = ", q_evolution)
         print("p_evolution = ", p_evolution)
         print("Hamiltonian_value = ", Hamiltonian_value)
 
+        plt.title("Position coordinates $q$")
+        plt.xlabel("$q_{1}$")
+        plt.ylabel("$q_{2}$")
+        plt.axes().set_aspect("equal")
+        plt.grid(":")
+        plt.plot(q_evolution[0, :], q_evolution[1, :], "ro-")
+        plt.savefig("position_coordinates.png", dpi=200)
+        plt.close()
+
+        plt.title("Momentum coordinates $p$")
+        plt.xlabel("$p_{1}$")
+        plt.ylabel("$p_{2}$")
+        plt.axes().set_aspect("equal")
+        plt.grid(":")
+        plt.plot(p_evolution[0, :], p_evolution[1, :], "ro-")
+        plt.savefig("momentum_coordinates.png", dpi=200)
+        plt.close()
+
         plt.title("Value of Hamiltonian")
         plt.xlabel("Iterations")
         plt.ylabel("$H(q, p)$")
         plt.grid(":")
-        plt.plot(range(num_steps), Hamiltonian_value, "r-")
-        plt.savefig("value_of_hamiltonian.png")
+        # plt.axes().set_aspect("equal")
+        plt.plot(range(num_steps), Hamiltonian_value, "ro-")
+        plt.savefig("value_of_hamiltonian.png", dpi=200)
         plt.close()
 
+    #######################################################################################################
+    # Plotting End ########################################################################################
+    #######################################################################################################
 
     #######################################################################################################
     # Run Hamiltonian MCMC End ############################################################################

@@ -47,6 +47,9 @@ def hamiltonian_mcmc_sample(U, grad_U, K, grad_K, mass_matrix, step_size, num_st
     # 1. Draw momentum variables p from (Gaussian) distribution ###########################################
     p = draw_momentum(mass_matrix)
 
+    if return_evolution:
+        p = np.array([-1.0, 1.0], dtype=float).T
+
     # 2. Perform Metropolis update using Hamiltonian dynamics to propose new state in phase space #########
     q_proposed_evolution, p_proposed_evolution = leapfrog(
         q, p, grad_U, grad_K, step_size, num_steps)
