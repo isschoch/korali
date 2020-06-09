@@ -6,6 +6,7 @@ import sys
 # my code 
 from binning_analysis import *
 from leapfrog import *
+from test_hamiltonian_mcmc import *
 
 
 ###########################################################################################################
@@ -19,22 +20,30 @@ from leapfrog import *
 # T := 1 assumed
 
 
-def hamiltonian_mcmc(q_init, data, num_samples, U, grad_U, K, grad_K):
+def hamiltonian_mcmc(q_init, num_samples, num_warmup_samples, U, grad_U, K, grad_K, mass_matrix, step_size=0.001, num_steps=10, return_evolution=False):
+    # initialization
     samples = []
-    step_size = 0.001
-    num_steps = 10
-
     q = q_init
-    for i in range(num_samples):
+
+    # warmup
+    for i in range(num_warmup_samples):
         q = hamiltonian_mcmc_sample(
             U, grad_U, K, grad_K, mass_matrix, step_size, num_steps, q)
+
+    # sample steps
+    for i in range(num_samples):
+        q = hamiltonian_mcmc_sample(
+            U, grad_U, K, grad_K, mass_matrix, step_size, num_steps, q, return_evolution)
         samples.append(q)
+
+    if return_evolution:
+        return samples
 
     return np.array(samples)
 
 
 # takes potential U and current state q and returns next step based on Hamiltonian dynamcis
-def hamiltonian_mcmc_sample(U, grad_U, K, grad_K, mass_matrix, step_size, num_steps, q):
+def hamiltonian_mcmc_sample(U, grad_U, K, grad_K, mass_matrix, step_size, num_steps, q, return_evolution=False):
     # 1. Draw momentum variables p from (Gaussian) distribution ###########################################
     p = draw_momentum(mass_matrix)
 
@@ -53,6 +62,10 @@ def hamiltonian_mcmc_sample(U, grad_U, K, grad_K, mass_matrix, step_size, num_st
     q_next = q
     if accept_state_rule(q, q_proposed, p, p_proposed, U, K):
         q_next = q_proposed
+
+    # only here for testing and visulization
+    if return_evolution:
+        return q_next, q_proposed_evolution, p_proposed_evolution
 
     return q_next
 
@@ -89,171 +102,18 @@ def accept_state_rule(q, q_proposed, p, p_proposed, U, K):
 # Hamiltoninian MCMC End ##################################################################################
 ###########################################################################################################
 
+###########################################################################################################
+# Parameters Start ########################################################################################
+###########################################################################################################
+
+#TODO
+
+###########################################################################################################
+# Parameters End ##########################################################################################
+###########################################################################################################
+
+
 if __name__ == "__main__":
-    verbose = False
-    if sys.argv[-1] == "-v":
-        verbose = True
+    gaussian_2d_test()
 
 
-    #######################################################################################################
-    # Generate Data Start #################################################################################
-    #######################################################################################################
-
-    mean = 10
-    standard_deviation = 3
-
-
-    def mod1(t): return np.random.normal(mean, standard_deviation, t)
-
-
-    # population of size 30000
-    population_size = 1000
-    population = mod1(population_size)
-
-    # observations (np.random.randint(low, high, size))
-    num_data_points = 500
-    data = population[np.random.randint(0, population_size, num_data_points)]
-    mu_obs = data.mean()
-    sigma_obs = np.sqrt(1. / (len(data) - 1) *
-                        np.sum(np.abs(data - mu_obs)**2))
-    
-
-    if verbose:    
-        print("mu_obs = ", mu_obs)
-        print("sigma_obs = ", sigma_obs)
-
-    q_init = np.array([mu_obs, sigma_obs])
-
-    #######################################################################################################
-    # Generate Data End ###################################################################################
-    #######################################################################################################
-
-
-    #######################################################################################################
-    # Energy definitions Start ############################################################################
-    #######################################################################################################
-
-
-    def prior(q):
-        if q[1] <= 0:
-            return 0
-        return 1
-
-
-    def log_likelihood(q, data):
-        n = len(data)
-        mu = q[0]
-        sigma = q[1]
-
-        return - 0.5 * np.sum(np.abs(data - mu) ** 2) / sigma ** 2 - n * (np.log(sigma) + 0.5 * np.log(2.0 * np.pi))
-
-
-    mass = 0.01 * np.ones(shape=(2), dtype=float)
-    mass_matrix = np.diag(mass)
-
-
-    def U(q): return - (log_likelihood(q, data) + np.log(prior(q)))
-
-
-    def grad_U(q):
-        mu = q[0]
-        sigma = q[1]
-        n = len(data)
-
-        gradient = np.zeros(shape=(len(q_init)), dtype=float)
-        gradient[0] = np.sum(data - mu) / sigma ** 2
-        gradient[1] = - n / sigma + np.sum(np.abs(data - mu) ** 2) / sigma ** 3
-        return gradient
-
-
-    def K(p):
-        return np.matmul(np.matmul(p.T, np.linalg.inv(mass_matrix)), p) / 2.
-
-
-    def grad_K(p):
-        return np.matmul(np.linalg.inv(mass_matrix), p)
-
-
-    #######################################################################################################
-    # Energy definitions End ##############################################################################
-    #######################################################################################################
-
-
-    #######################################################################################################
-    # Run Hamiltonian MCMC Start ##########################################################################
-    #######################################################################################################
-
-
-    num_samples = 100000
-
-    samples = hamiltonian_mcmc(q_init, data, num_samples, U, grad_U, K, grad_K)
-
-    if verbose:
-        print("samples = ", samples)
-
-
-    #######################################################################################################
-    # Run Hamiltonian MCMC End ############################################################################
-    #######################################################################################################
-
-
-    #######################################################################################################
-    # Plotting Start ######################################################################################
-    #######################################################################################################
-
-    if verbose:
-        plt.title("samples")
-        plt.xlabel("Iterations")
-        plt.ylabel("$Parameter Value$")
-        plt.legend(["$\mu$", "$\sigma$"])
-        plt.grid(":")
-        plt.plot(range(num_samples), samples)
-        plt.savefig("samples.png")
-        plt.close()
-
-
-        plt.title("Parameter Value $\mu$ Distribution")
-        plt.xlabel("Parameter Value $\mu$")
-        plt.ylabel("Number of Occurences")
-        plt.grid(":")
-        plt.hist(samples[:, 0], bins=50)
-        plt.savefig("parameter_distribution_mu.png")
-        plt.close()
-
-        plt.title("Parameter Value $\sigma$ Distribution")
-        plt.xlabel("Parameter Value $\sigma$")
-        plt.ylabel("Number of Occurences")
-        plt.grid(":")
-        plt.hist(samples[:, 1], bins=50)
-        plt.savefig("parameter_distribution_sigma.png")
-        plt.close()
-
-        x = samples[:, 0]
-        y = samples[:, 1]
-
-        plt.hist2d(x, y, bins=50, density=False, cmap='plasma')
-
-        # Plot a colorbar with label.
-        cb = plt.colorbar()
-        cb.set_label('Number of entries')
-
-        # Add title and labels to plot.
-        plt.title('Samples of Posterior $P((\mu, \sigma) \mid \mathcal{D})$')
-        plt.xlabel('$\mu$')
-        plt.ylabel('$\sigma$')
-
-        # Show the plot.
-        plt.savefig('heatmap.png')
-
-        mu_estimates = np.cumsum(samples[:, 0], axis=0) / \
-            np.linspace(1, num_samples + 1, num=num_samples)
-        print("mu_estimates = ", mu_estimates)
-
-        sigma_estimates = np.cumsum(
-            samples[:, 1], axis=0) / np.linspace(1, num_samples + 1, num=num_samples)
-        print("sigma_estimates = ", sigma_estimates)
-
-
-    #######################################################################################################
-    # Plotting End ########################################################################################
-    #######################################################################################################
