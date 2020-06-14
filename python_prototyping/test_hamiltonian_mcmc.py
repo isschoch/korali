@@ -25,11 +25,11 @@ def population_test():
     def mod1(t): return np.random.normal(mean, standard_deviation, t)
 
     # population of size 30000
-    population_size = 1000
+    population_size = 100000
     population = mod1(population_size)
 
     # observations (np.random.randint(low, high, size))
-    num_data_points = 500
+    num_data_points = 5000
     data = population[np.random.randint(0, population_size, num_data_points)]
     mu_obs = data.mean()
     sigma_obs = np.sqrt(1. / (len(data) - 1) *
@@ -61,7 +61,7 @@ def population_test():
 
         return - 0.5 * np.sum(np.abs(data - mu) ** 2) / sigma ** 2 - n * (np.log(sigma) + 0.5 * np.log(2.0 * np.pi))
 
-    mass = 0.01 * np.ones(shape=(2), dtype=float)
+    mass = np.ones(shape=(2), dtype=float)
     mass_matrix = np.diag(mass)
 
     def U(q): return - (log_likelihood(q, data) + np.log(prior(q)))
@@ -76,12 +76,6 @@ def population_test():
         gradient[1] = - n / sigma + np.sum(np.abs(data - mu) ** 2) / sigma ** 3
         return gradient
 
-    def K(p):
-        return np.matmul(np.matmul(p.T, np.linalg.inv(mass_matrix)), p) / 2.
-
-    def grad_K(p):
-        return np.matmul(np.linalg.inv(mass_matrix), p)
-
     #######################################################################################################
     # Energy definitions End ##############################################################################
     #######################################################################################################
@@ -91,10 +85,9 @@ def population_test():
     #######################################################################################################
 
     num_samples = 1000
-    num_warmup_samples = 0
 
-    samples = hamiltonian_mcmc(
-        q_init, num_samples, num_warmup_samples, U, grad_U, K, grad_K, mass_matrix)
+    samples = hamiltonian_mcmc(num_samples, U, grad_U, step_size=0.001, num_steps=10,
+                               mass_matrix=mass_matrix, q_init=q_init)
 
     if verbose:
         print("samples = ", samples)
@@ -154,6 +147,7 @@ def population_test():
 
         # Show the plot.
         plt.savefig('heatmap.png')
+        plt.close()
 
         print("mu_estimates = ", mu_estimates)
         print("sigma_estimates = ", sigma_estimates)
@@ -188,6 +182,7 @@ def population_test():
 
 def gaussian_2d_trajectory_test():
     mass_matrix = np.array([[1.0, 0.0], [0.0, 1.0]], dtype=float)
+    mass_matrix_inv = np.linalg.inv(mass_matrix)
 
     covariance_matrix = np.array([[1.0, 0.95], [0.95, 1.0]], dtype=float)
     covariance_matrix_inv = np.linalg.inv(covariance_matrix)
@@ -208,10 +203,7 @@ def gaussian_2d_trajectory_test():
         return np.matmul(covariance_matrix_inv, q)
 
     def K(p):
-        return np.dot(p, p) / 2.
-
-    def grad_K(p):
-        return p
+        return 0.5 * np.matmul(np.matmul(p.T, mass_matrix_inv), p)
 
     #######################################################################################################
     # Energy definitions End ##############################################################################
@@ -224,13 +216,11 @@ def gaussian_2d_trajectory_test():
     q_init = np.array([-1.50, -1.55]).T
 
     num_samples = 1
-    num_warmup_samples = 0
     step_size = 0.25
     num_steps = 25
-    return_evolution = True
 
-    samples = hamiltonian_mcmc(q_init, num_samples, num_warmup_samples,
-                               U, grad_U, K, grad_K, mass_matrix, step_size, num_steps, return_evolution)
+    samples = hamiltonian_mcmc(num_samples, U, grad_U, step_size, num_steps, q_init=q_init,
+                               mass_matrix=mass_matrix, return_evolution=True, euclidean_metric=False)
 
     q_evolution = np.array(samples[0][1])
     p_evolution = np.array(samples[0][2])
@@ -325,16 +315,12 @@ def gaussian_2d_trajectory_test():
 
     if np.linalg.norm(q_evolution - q_evolution_reference) > tolerance:
         test_passed = False
-        print("q didnt pass")
 
     if np.linalg.norm(p_evolution - p_evolution_reference) > tolerance:
         test_passed = False
-        print("p didnt pass")
 
     if np.linalg.norm(Hamiltonian_value - Hamiltonian_value_reference) > tolerance:
         test_passed = False
-        print("H didnt pass", np.linalg.norm(
-            Hamiltonian_value - Hamiltonian_value_reference))
 
     print("gaussian_2d_trajectory_test passed?: ", test_passed)
 
@@ -381,15 +367,14 @@ def gaussian_2d_sampling_test():
     # Run Hamiltonian MCMC Start ##########################################################################
     #######################################################################################################
 
-    q_init = np.array([-1.50, -1.55]).T
+    q_start = np.array([-1.50, -1.55]).T
 
     num_samples = 200
-    num_warmup_samples = 0
     step_size = 0.18
     num_steps = 20
 
-    samples = hamiltonian_mcmc(q_init, num_samples, num_warmup_samples,
-                               U, grad_U, K, grad_K, mass_matrix, step_size, num_steps)
+    samples = hamiltonian_mcmc(num_samples, U, grad_U, step_size, num_steps, mass_matrix=mass_matrix,
+                               q_init=q_start)
 
     #######################################################################################################
     # Run Hamiltonian MCMC End ############################################################################
@@ -479,15 +464,14 @@ def gaussian_100d_sampling_test():
     q_init = np.zeros(dim, dtype=float)
 
     num_samples = 1000
-    num_warmup_samples = 0
     step_size = 0.013
-    uniform_samples_step_size = [-0.20 * step_size, 0.20 * step_size]
     num_steps = 150
-    return_evolution = False
 
-    samples = hamiltonian_mcmc(q_init, num_samples, num_warmup_samples,
-                               U, grad_U, K, grad_K, mass_matrix, step_size, num_steps, return_evolution,
-                               uniform_samples_step_size)
+    samples = hamiltonian_mcmc(num_samples, U, grad_U, step_size, num_steps,
+                               mass_matrix=mass_matrix, return_evolution=False,
+                               uniform_samples_step_size=[-0.20 *
+                                                          step_size, 0.20 * step_size],
+                               q_init=q_init)
 
     #######################################################################################################
     # Run Hamiltonian MCMC End ############################################################################
@@ -540,15 +524,15 @@ def gaussian_100d_sampling_test():
     #######################################################################################################
     # Check test Start ####################################################################################
     #######################################################################################################
-    
+
     test_passed = True
     tolerance = 5.0e-1
     if np.linalg.norm(estimated_mean - np.zeros(dim, dtype=float)) > tolerance:
         test_passed = False
-    
+
     if np.linalg.norm(estimated_standard_deviation - standard_deviation) > tolerance:
         test_passed = False
-    
+
     print("gaussian_100d_sampling_test passed? (stochastic): ", test_passed)
 
     #######################################################################################################

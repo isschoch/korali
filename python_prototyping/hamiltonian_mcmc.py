@@ -20,30 +20,95 @@ from test_hamiltonian_mcmc import *
 # T := 1 assumed
 
 
-def hamiltonian_mcmc(q_init, num_samples, num_warmup_samples, U, grad_U, K, grad_K, mass_matrix,
-                     step_size=0.001, num_steps=10, return_evolution=False,
-                     uniform_samples_step_size=False):
+def hamiltonian_mcmc(num_samples, U, grad_U, step_size, num_steps, q_init=None, dim=None, mass_matrix=None,
+                     return_evolution=False, uniform_samples_step_size=False, euclidean_metric=True,
+                     num_warmup_samples=1000, warmup_quotient=0.7):
+    # assert input
+    assert q_init is not None or dim is not None, "Initialize at least one of \"q_init\", \"dim\""
+    if q_init is None:
+        q_init = np.zeros(dim, dtype=float)
+    elif q_init is not None:
+        if dim is None:
+            dim = len(q_init)
+        elif dim is not None:
+            assert len(
+                q_init) == dim, "dimension of \"q_init\" does not correspond to \"dim\""
+
+    # remove
+    metric = mass_matrix
+
     # initialization
-    samples = []
     q = q_init
 
-    # warmup
-    for i in range(num_warmup_samples):
-        q = hamiltonian_mcmc_sample(
-            U, grad_U, K, grad_K, mass_matrix, step_size, num_steps, q, return_evolution,
-            uniform_samples_step_size)
+    if metric is None:
+        metric = np.identity(dim, dtype=float)
+    metric_inv = np.linalg.inv(metric)
+
+    def K(p):
+        return 0.5 * np.matmul(np.matmul(p.T, metric_inv), p)
+
+    def grad_K(p):
+        return np.matmul(metric_inv, p)
+
+    # 1. warmup ###########################################################################################
+    if euclidean_metric == True:
+        metric_inv, q = estimate_metric_inv(
+            num_warmup_samples, U, grad_U, step_size, num_steps, metric, metric_inv, q, dim, warmup_quotient)
+        metric = np.linalg.inv(metric_inv)
 
     # sample steps
+    samples = []
     for i in range(num_samples):
-        q = hamiltonian_mcmc_sample(
-            U, grad_U, K, grad_K, mass_matrix, step_size, num_steps, q, return_evolution,
-            uniform_samples_step_size)
+        q = hamiltonian_mcmc_sample(U, grad_U, K, grad_K, metric, step_size,
+                                    num_steps, q, return_evolution, uniform_samples_step_size)
         samples.append(q)
 
     if return_evolution:
         return samples
 
-    return np.array(samples)
+    return np.array(samples, dtype=float)
+
+
+# based on "A Conceptual Introduction to Hamiltonian Monte Carlo" p. 31
+# first uses metric given by mass_matrix (default is identity) to sample (warmup_quotient * num_samples)
+# samples and uses these to estimate metric_inv. After this estimation is made the remaining
+# (1. - warmup_quotient) * num_samples to get an even better estimate of metric_inv
+
+
+def estimate_metric_inv(num_estimate_samples, U, grad_U, step_size, num_steps, metric, metric_inv, q,
+                        dim, warmup_quotient):
+    def K(p):
+        return 0.5 * np.matmul(np.matmul(p.T, metric_inv), p)
+
+    def grad_K(p):
+        return np.matmul(metric_inv, p)
+
+    warmup_samples = np.zeros(shape=(num_estimate_samples, dim), dtype=float)
+
+    for i in range(num_estimate_samples):
+        q = hamiltonian_mcmc_sample(
+            U, grad_U, K, grad_K, metric, step_size, num_steps, q)
+        warmup_samples[i, :] = q
+        if i == (int)(warmup_quotient * num_estimate_samples):
+            metric_inv = covariance_matrix(warmup_samples, (int)(
+                warmup_quotient * num_estimate_samples))
+            metric = np.linalg.inv(metric_inv)
+
+    metric_inv = covariance_matrix(warmup_samples, num_estimate_samples)
+
+    return metric_inv, q
+
+
+# returns covariance matrix from samples
+def covariance_matrix(samples, num_samples):
+    dim = np.shape(samples)[1]
+    mu_obs = np.sum(samples, axis=0) / num_samples
+    covariance = np.zeros(shape=(dim, dim), dtype=float)
+    for i in range(num_samples):
+        tmp_mat = np.outer(samples[i, :] - mu_obs, samples[i, :] - mu_obs)
+        covariance += tmp_mat
+    covariance = covariance / num_samples
+    return covariance
 
 
 # takes potential U and current state q and returns next step based on Hamiltonian dynamcis
@@ -59,7 +124,8 @@ def hamiltonian_mcmc_sample(U, grad_U, K, grad_K, mass_matrix, step_size, num_st
     if uniform_samples_step_size == False:
         step_size_realization = step_size
     else:
-        step_size_realization = step_size + np.random.uniform(uniform_samples_step_size[0], uniform_samples_step_size[1])
+        step_size_realization = step_size + np.random.uniform(uniform_samples_step_size[0],
+                                                              uniform_samples_step_size[1])
 
     q_proposed_evolution, p_proposed_evolution = leapfrog(
         q, p, grad_U, grad_K, step_size_realization, num_steps)
@@ -89,9 +155,6 @@ def draw_momentum(mass_matrix):
     # here just a Gaussian distribution
     p_proposed = np.random.multivariate_normal(
         np.zeros(shape=(np.shape(mass_matrix)[0])), mass_matrix)
-
-    # if p_proposed[1] <= 0.:
-    #     draw_momentum(mass_matrix)
 
     return p_proposed
 
