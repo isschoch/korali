@@ -21,7 +21,7 @@ from test_hamiltonian_mcmc import *
 
 
 def hamiltonian_mcmc(num_samples, U, grad_U, step_size, num_steps, q_init=None, dim=None, mass_matrix=None,
-                     return_evolution=False, uniform_samples_step_size=False, euclidean_metric=True,
+                     return_evolution=False, uniform_samples_step_size=False, euclidean_metric=False,
                      num_warmup_samples=1000, warmup_quotient=0.7):
     # assert input
     assert q_init is not None or dim is not None, "Initialize at least one of \"q_init\", \"dim\""
@@ -58,15 +58,18 @@ def hamiltonian_mcmc(num_samples, U, grad_U, step_size, num_steps, q_init=None, 
 
     # sample steps
     samples = []
+    num_accepted_proposals = 0
     for i in range(num_samples):
-        q = hamiltonian_mcmc_sample(U, grad_U, K, grad_K, metric, step_size,
-                                    num_steps, q, return_evolution, uniform_samples_step_size)
+        q, accepted_proposal = hamiltonian_mcmc_sample(U, grad_U, K, grad_K, metric, step_size, num_steps, q, return_evolution, uniform_samples_step_size)
         samples.append(q)
+        if accepted_proposal:
+            num_accepted_proposals += 1
 
+    accept_ratio = num_accepted_proposals / num_samples
     if return_evolution:
         return samples
 
-    return np.array(samples, dtype=float)
+    return np.array(samples, dtype=float), accept_ratio
 
 
 # based on "A Conceptual Introduction to Hamiltonian Monte Carlo" p. 31
@@ -141,14 +144,16 @@ def hamiltonian_mcmc_sample(U, grad_U, K, grad_K, mass_matrix, step_size, num_st
 
     # 3. Accept or reject proposed position in phase space ################################################
     q_next = q
+    accepted_proposal = False
     if accept_state_rule(q, q_proposed, p, p_proposed, U, K):
         q_next = q_proposed
+        accepted_proposal = True
 
     # only here for testing and visulization
     if return_evolution:
         return q_next, q_proposed_evolution, p_proposed_evolution
 
-    return q_next
+    return q_next, accepted_proposal
 
 # samples momentum (artifically introduced)
 
@@ -196,6 +201,6 @@ def accept_state_rule(q, q_proposed, p, p_proposed, U, K):
 
 if __name__ == "__main__":
     # population_test()
-    # gaussian_2d_trajectory_test()
-    gaussian_2d_sampling_test()
+    gaussian_2d_trajectory_test()
+    # gaussian_2d_sampling_test()
     # gaussian_100d_sampling_test()

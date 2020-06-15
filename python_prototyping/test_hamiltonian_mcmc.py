@@ -25,6 +25,7 @@ print("plots        = ", plots)
 print("statistics   = ", statistics)
 print("---------------------")
 
+
 def print_statistics(samples, num_samples):
     E_BFMI = calc_E_BFMI_hat(samples, num_samples)
     print("E_BFMI = ", E_BFMI)
@@ -111,11 +112,12 @@ def population_test():
 
     num_samples = 10000
 
-    samples = hamiltonian_mcmc(num_samples, U, grad_U, step_size=0.01, num_steps=10,
-                               mass_matrix=mass_matrix, q_init=q_init, euclidean_metric=False)
+    samples, accept_ratio = hamiltonian_mcmc(num_samples, U, grad_U, step_size=0.01, num_steps=10,
+                                             mass_matrix=mass_matrix, q_init=q_init, euclidean_metric=False)
 
     if verbose:
         print("samples = ", samples)
+        print("accept_ratio = ", accept_ratio)
 
     #######################################################################################################
     # Run Hamiltonian MCMC End ############################################################################
@@ -234,6 +236,9 @@ def gaussian_2d_trajectory_test():
     def K(p):
         return 0.5 * np.matmul(np.matmul(p.T, mass_matrix_inv), p)
 
+    def grad_K(p):
+        return np.matmul(mass_matrix_inv, p)
+
     #######################################################################################################
     # Energy definitions End ##############################################################################
     #######################################################################################################
@@ -248,11 +253,9 @@ def gaussian_2d_trajectory_test():
     step_size = 0.25
     num_steps = 25
 
-    samples = hamiltonian_mcmc(num_samples, U, grad_U, step_size, num_steps, q_init=q_init,
-                               mass_matrix=mass_matrix, return_evolution=True, euclidean_metric=False)
-
-    q_evolution = np.array(samples[0][1])
-    p_evolution = np.array(samples[0][2])
+    q_next, q_evolution, p_evolution = hamiltonian_mcmc_sample(U, grad_U, K, grad_K,          
+                                        mass_matrix, step_size, num_steps, q_init,
+                            return_evolution=True, uniform_samples_step_size=False)
 
     Hamiltonian_value = np.zeros(shape=(num_steps))
     for i in range(num_steps):
@@ -353,7 +356,7 @@ def gaussian_2d_trajectory_test():
         test_passed = False
 
     print("gaussian_2d_trajectory_test passed?: ", test_passed)
-    
+
     if statistics:
         print("No statistics available")
 
@@ -406,8 +409,8 @@ def gaussian_2d_sampling_test():
     step_size = 0.18
     num_steps = 20
 
-    samples = hamiltonian_mcmc(num_samples, U, grad_U, step_size, num_steps, mass_matrix=mass_matrix,
-                               q_init=q_start)
+    samples, accept_ratio = hamiltonian_mcmc(num_samples, U, grad_U, step_size, num_steps, mass_matrix=mass_matrix,
+                                             q_init=q_start)
 
     #######################################################################################################
     # Run Hamiltonian MCMC End ############################################################################
@@ -419,6 +422,7 @@ def gaussian_2d_sampling_test():
 
     if verbose:
         print("samples = ", samples)
+        print("accept_ratio = ", accept_ratio)
 
     if plots:
         plt.title("Position coordinates $q$ (Samples)")
@@ -504,11 +508,11 @@ def gaussian_100d_sampling_test():
     step_size = 0.013
     num_steps = 150
 
-    samples = hamiltonian_mcmc(num_samples, U, grad_U, step_size, num_steps,
-                               mass_matrix=mass_matrix, return_evolution=False,
-                               uniform_samples_step_size=[-0.20 *
-                                                          step_size, 0.20 * step_size],
-                               q_init=q_init)
+    samples, accept_ratio = hamiltonian_mcmc(num_samples, U, grad_U, step_size, num_steps,
+                                             mass_matrix=mass_matrix, return_evolution=False,
+                                             uniform_samples_step_size=[-0.20 *
+                                                                        step_size, 0.20 * step_size],
+                                             q_init=q_init)
 
     #######################################################################################################
     # Run Hamiltonian MCMC End ############################################################################
@@ -527,6 +531,7 @@ def gaussian_100d_sampling_test():
 
     if verbose:
         print("samples = ", samples)
+        print("accept_ratio = ", accept_ratio)
         print("estimated_mean = ", estimated_mean)
         print("estimated_standard_deviation = ", estimated_standard_deviation)
 
