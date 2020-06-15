@@ -4,7 +4,7 @@ import matplotlib.pyplot as plt
 import sys
 
 # my code
-from binning_analysis import *
+from statistics import *
 from leapfrog import *
 from test_hamiltonian_mcmc import *
 
@@ -104,9 +104,11 @@ def covariance_matrix(samples, num_samples):
     dim = np.shape(samples)[1]
     mu_obs = np.sum(samples, axis=0) / num_samples
     covariance = np.zeros(shape=(dim, dim), dtype=float)
+
     for i in range(num_samples):
         tmp_mat = np.outer(samples[i, :] - mu_obs, samples[i, :] - mu_obs)
         covariance += tmp_mat
+        
     covariance = covariance / num_samples
     return covariance
 
@@ -177,7 +179,6 @@ def accept_state_rule(q, q_proposed, p, p_proposed, U, K):
 
     return False
 
-
 ###########################################################################################################
 # Hamiltoninian MCMC End ##################################################################################
 ###########################################################################################################
@@ -194,7 +195,7 @@ def accept_state_rule(q, q_proposed, p, p_proposed, U, K):
 
 
 if __name__ == "__main__":
-    population_test()
-    gaussian_2d_trajectory_test()
+    # population_test()
+    # gaussian_2d_trajectory_test()
     gaussian_2d_sampling_test()
-    gaussian_100d_sampling_test()
+    # gaussian_100d_sampling_test()

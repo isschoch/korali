@@ -5,10 +5,31 @@ import sys
 
 # my code
 from hamiltonian_mcmc import *
+from statistics import *
 
 verbose = False
-if sys.argv[-1] == "-v":
-    verbose = True
+plots = False
+statistics = False
+
+if len(sys.argv) > 1:
+    if np.isin(sys.argv, "-v").any():
+        verbose = True
+    if np.isin(sys.argv, "-p").any():
+        plots = True
+    if np.isin(sys.argv, "-s").any():
+        statistics = True
+
+print("--------FLAGS--------")
+print("verbose      = ", verbose)
+print("plots        = ", plots)
+print("statistics   = ", statistics)
+print("---------------------")
+
+def print_statistics(samples, num_samples):
+    E_BFMI = calc_E_BFMI_hat(samples, num_samples)
+    print("E_BFMI = ", E_BFMI)
+    ESS = calc_ESS_hat(samples, num_samples)
+    print("ESS = ", ESS)
 
 # based on https://towardsdatascience.com/from-scratch-bayesian-inference-markov-chain-monte-carlo-and-metropolis-hastings-in-python-ef21a29e25a
 
@@ -25,11 +46,11 @@ def population_test():
     def mod1(t): return np.random.normal(mean, standard_deviation, t)
 
     # population of size 30000
-    population_size = 100000
+    population_size = 3000
     population = mod1(population_size)
 
     # observations (np.random.randint(low, high, size))
-    num_data_points = 5000
+    num_data_points = 100
     data = population[np.random.randint(0, population_size, num_data_points)]
     mu_obs = data.mean()
     sigma_obs = np.sqrt(1. / (len(data) - 1) *
@@ -64,7 +85,11 @@ def population_test():
     mass = np.ones(shape=(2), dtype=float)
     mass_matrix = np.diag(mass)
 
-    def U(q): return - (log_likelihood(q, data) + np.log(prior(q)))
+    def U(q):
+        if prior(q) <= 0.0:
+            return -np.finfo(float).max
+
+        return - (log_likelihood(q, data) + np.log(prior(q)))
 
     def grad_U(q):
         mu = q[0]
@@ -84,10 +109,10 @@ def population_test():
     # Run Hamiltonian MCMC Start ##########################################################################
     #######################################################################################################
 
-    num_samples = 1000
+    num_samples = 10000
 
-    samples = hamiltonian_mcmc(num_samples, U, grad_U, step_size=0.001, num_steps=10,
-                               mass_matrix=mass_matrix, q_init=q_init)
+    samples = hamiltonian_mcmc(num_samples, U, grad_U, step_size=0.01, num_steps=10,
+                               mass_matrix=mass_matrix, q_init=q_init, euclidean_metric=False)
 
     if verbose:
         print("samples = ", samples)
@@ -105,7 +130,7 @@ def population_test():
 
     sigma_estimates = np.cumsum(
         samples[:, 1], axis=0) / np.linspace(1, num_samples + 1, num=num_samples)
-    if verbose:
+    if plots:
         plt.title("samples")
         plt.xlabel("Iterations")
         plt.ylabel("$Parameter Value$")
@@ -149,6 +174,7 @@ def population_test():
         plt.savefig('heatmap.png')
         plt.close()
 
+    if verbose:
         print("mu_estimates = ", mu_estimates)
         print("sigma_estimates = ", sigma_estimates)
 
@@ -170,6 +196,9 @@ def population_test():
         test_passed = True
 
     print("Population test passed? (stochastic): ", test_passed)
+
+    if statistics:
+        print_statistics(samples, num_samples)
 
     #######################################################################################################
     # Check test End ######################################################################################
@@ -242,6 +271,7 @@ def gaussian_2d_trajectory_test():
         print("p_evolution = ", p_evolution)
         print("Hamiltonian_value = ", Hamiltonian_value)
 
+    if plots:
         plt.title("Position coordinates $q$")
         plt.xlabel("$q_{1}$")
         plt.ylabel("$q_{2}$")
@@ -323,6 +353,9 @@ def gaussian_2d_trajectory_test():
         test_passed = False
 
     print("gaussian_2d_trajectory_test passed?: ", test_passed)
+    
+    if statistics:
+        print("No statistics available")
 
     #######################################################################################################
     # Check test End ######################################################################################
@@ -387,6 +420,7 @@ def gaussian_2d_sampling_test():
     if verbose:
         print("samples = ", samples)
 
+    if plots:
         plt.title("Position coordinates $q$ (Samples)")
         plt.xlabel("$q_{1}$")
         plt.ylabel("$q_{2}$")
@@ -416,6 +450,9 @@ def gaussian_2d_sampling_test():
     # Due to stochastisity of test (momentum is drawn randomly from Gaussian distribution) one has to
     # compare plots with paper "MCMC Using Hamiltonian Dynamcis" on page 17
     print("gaussian_2d_sampling_test passed?: Check plots")
+
+    if statistics:
+        print_statistics(samples, num_samples)
 
     #######################################################################################################
     # Check test End ######################################################################################
@@ -493,6 +530,7 @@ def gaussian_100d_sampling_test():
         print("estimated_mean = ", estimated_mean)
         print("estimated_standard_deviation = ", estimated_standard_deviation)
 
+    if plots:
         plt.title("Estimate of Expectation Value $\mu$")
         plt.xlabel("Standard Deviation $\sigma$ of Coordinate")
         plt.ylabel("Estimated Expectation Value")
@@ -534,6 +572,9 @@ def gaussian_100d_sampling_test():
         test_passed = False
 
     print("gaussian_100d_sampling_test passed? (stochastic): ", test_passed)
+
+    if statistics:
+        print_statistics(samples, num_samples)
 
     #######################################################################################################
     # Check test End ######################################################################################
