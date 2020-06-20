@@ -17,9 +17,9 @@ def explicit_euler(q_init, p_init, grad_U, grad_K, step_size, num_steps):
 
 
 def leapfrog(q_init, p_init, grad_U, grad_K, step_size, num_steps):
-    q = np.zeros(shape=(len(q_init), num_steps + 1), dtype=float)
-    p = np.zeros(shape=(len(q_init), num_steps + 1), dtype=float)
-    p_midsteps = np.zeros(shape=(len(q_init), num_steps + 1), dtype=float)
+    q = np.zeros(shape=(len(q_init), num_steps+1), dtype=float)
+    p = np.zeros(shape=(len(q_init), num_steps+1), dtype=float)
+    p_midsteps = np.zeros(shape=(len(q_init), num_steps+1), dtype=float)
 
     q[:, 0] = q_init
     p[:, 0] = p_init
