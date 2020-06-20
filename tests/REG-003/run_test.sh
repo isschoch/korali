@@ -1,17 +1,21 @@
 #!/bin/bash
 
-###### Auxiliar Functions and Variables #########
-
 source ../functions.sh
 
-############# STEP 1 ##############
+pushd ../../examples/; check_result
 
-pushd ../../docs
-check_result
+echo "[Korali] Beginning plotting tests"
 
-# Run documentation builder
-./build.sh
-check_result
+resDirs=`find . -name "*_result*"`
+
+for dir in $resDirs
+do
+  echo "-------------------------------------"
+  echo " Plotting results from $dir ..."
+  echo "-------------------------------------"
+  python3 -m korali.plotter --test --dir "${dir}" 
+  check_result
+
+done
 
 popd
-check_result

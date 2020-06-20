@@ -1,7 +1,11 @@
 #include "modules/solver/solver.hpp"
 
-std::vector<std::vector<double>> korali::Solver::test(const std::vector<std::vector<double>> &inputBatch)
+namespace korali
 {
-  korali::Logger::logError("This solver does not provide a test operation.\n");
+std::vector<std::vector<double>> Solver::evaluate(const std::vector<std::vector<double>> &inputBatch)
+{
+  KORALI_LOG_ERROR("This solver does not provide a test operation.\n");
   return {{}};
 }
+
+} // namespace korali

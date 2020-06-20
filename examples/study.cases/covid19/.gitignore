@@ -1,0 +1,13 @@
+*.pyc
+.tags
+__pycache__/
+extern
+_executor_output
+_korali_propagation
+_korali_samples
+data/population_data.json
+data/intervals.json
+
+build
+
+request*/

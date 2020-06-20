@@ -1,0 +1,4 @@
+#! /bin/sh
+
+# TEST: diameters
+./diameters.py --mesh ../data/rbc_mesh.off --out diameters.out.txt

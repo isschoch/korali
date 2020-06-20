@@ -1,12 +1,18 @@
 #include "modules/distribution/univariate/logNormal/logNormal.hpp"
 #include "modules/experiment/experiment.hpp"
 
-double korali::distribution::univariate::LogNormal::getDensity(double x)
+namespace korali
+{
+namespace distribution
+{
+namespace univariate
+{
+double LogNormal::getDensity(const double x) const
 {
   return gsl_ran_lognormal_pdf(x, _mu, _sigma);
 }
 
-double korali::distribution::univariate::LogNormal::getLogDensity(double x)
+double LogNormal::getLogDensity(const double x) const
 {
   if (x < 0) return -INFINITY;
   double logx = gsl_sf_log(x);
@@ -14,14 +20,20 @@ double korali::distribution::univariate::LogNormal::getLogDensity(double x)
   return _aux - logx - 0.5 * d * d;
 }
 
-double korali::distribution::univariate::LogNormal::getRandomNumber()
+double LogNormal::getRandomNumber()
 {
   return gsl_ran_lognormal(_range, _mu, _sigma);
 }
 
-void korali::distribution::univariate::LogNormal::updateDistribution()
+void LogNormal::updateDistribution()
 {
-  if (_sigma <= 0.0) korali::Logger::logError("Incorrect Sigma parameter of LogNormal distribution: %f.\n", _sigma);
+  if (_sigma <= 0.0) KORALI_LOG_ERROR("Incorrect Sigma parameter of LogNormal distribution: %f.\n", _sigma);
 
   _aux = -0.5 * gsl_sf_log(2 * M_PI) - gsl_sf_log(_sigma);
 }
+
+} // namespace univariate
+
+} // namespace distribution
+
+} // namespace korali

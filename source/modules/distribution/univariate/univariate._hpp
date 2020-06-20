@@ -17,14 +17,14 @@ class Univariate : public korali::Distribution
  * @param x point to evaluate P(x)
  * @return Value of the probability density.
  */
-  virtual double getDensity(double x) = 0;
+  virtual double getDensity(const double x) const = 0;
 
   /**
  * @brief Gets the Log probability density of the distribution at point x.
  * @param x point to evaluate log(P(x))
  * @return Log of probability density.
  */
-  virtual double getLogDensity(double x) = 0;
+  virtual double getLogDensity(const double x) const = 0;
 
   /**
   * @brief Draws and returns a random number from the distribution.

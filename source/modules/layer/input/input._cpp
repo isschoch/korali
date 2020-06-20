@@ -1,2 +1,6 @@
 #include "modules/experiment/experiment.hpp"
 #include "modules/layer/input/input.hpp"
+
+namespace korali
+{
+} // namespace korali

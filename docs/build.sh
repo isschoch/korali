@@ -41,7 +41,10 @@ check
 pushd builder
 check
 
-python3 ./buildTutorials.py 
+python3 ./buildExamples.py 
+check
+
+python3 ./buildFeatures.py 
 check
 
 python3 ./buildTests.py 
@@ -69,11 +72,11 @@ check
 cp -r manual/.build/html/* web/docs
 check
 
-doxygenBin=../prereqs/doxygen
+doxygenBin=../external/doxygen
 # If doxygen is not installed, run the installation script
 if [ ! -f $doxygenBin ]; then
  pushd ..
- ./prereqs/install_doxygen.sh
+ ./external/install_doxygen.sh
  popd
 fi
 
@@ -82,8 +85,9 @@ echo "Using $doxygenBin for C++ documentation..."
 $doxygenBin doxygen.config 2>&1 | grep -E 'warning|error'
 if [ $? -eq 0 ]; then
  echo "[Korali] Error running doxygen."
- echo "[Korali] Solution: Make sure doxygen is correly installed by running:"
- echo "[Korali]           > {KORALI_ROOT}/prereqs/install_doxygen.sh"
+ echo "[Korali] Hint: Check if there is any missing variable/function documentation."
+ echo "[Korali] Hint: Also make sure doxygen is correctly installed by running:"
+ echo "[Korali]           > {KORALI_ROOT}/external/install_doxygen.sh"
  exit -1
 fi 
 

@@ -32,7 +32,7 @@ To do this, we simply define an initial set of termination criteria, and run the
    e = korali.Experiment()
    e["Problem"]["Type"] = "Optimization/Stochastic"
    e["Problem"]["Objective Function"] = myModel
-   e["Solver"]["Type"] = "CMAES"
+   e["Solver"]["Type"] = "Optimizer/CMAES"
    
    # ...  More experiment configuration ...
 
@@ -52,8 +52,6 @@ To do this, we simply define an initial set of termination criteria, and run the
     # Running again, starting from generation 4.
     k.resume(e)
 
-
-For a working example of this scenario, check this :ref:`tutorial <partialruns>`.
 
 Resuming an experiment from a save-state file
 ------------------------------------------------
@@ -96,9 +94,6 @@ To do this, we simply define an initial set of termination criteria, and run the
    else:
      k.run(e)
 
-
-For a working example of this scenario, check this :ref:`tutorial <checkpointrestart>`.
-   
 Resuming multiple experiments simultaneously
 ------------------------------------------------
 
@@ -138,4 +133,3 @@ In this case, we use the :code:`e.loadState()` function for all experiments.
    # If found, we continue execution 
    k.resume([e0, e1])
 
-For a working example of this scenario, check this :ref:`tutorial <checkpointrestart>`.

@@ -6,7 +6,7 @@
 
 namespace korali
 {
-class Problem : public korali::Module
+class Problem : public Module
 {
   public:
   /**

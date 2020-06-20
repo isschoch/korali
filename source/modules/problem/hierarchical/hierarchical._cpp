@@ -1,6 +1,10 @@
 #include "modules/problem/hierarchical/hierarchical.hpp"
 
-void korali::problem::Hierarchical::initialize()
+namespace korali
+{
+namespace problem
+{
+void Hierarchical::initialize()
 {
   for (size_t i = 0; i < _k->_variables.size(); i++)
   {
@@ -14,11 +18,11 @@ void korali::problem::Hierarchical::initialize()
       }
 
     if (foundDistribution == false)
-      korali::Logger::logError("Did not find distribution %s, specified by variable %s\n", _k->_variables[i]->_priorDistribution.c_str(), _k->_variables[i]->_name.c_str());
+      KORALI_LOG_ERROR("Did not find distribution %s, specified by variable %s\n", _k->_variables[i]->_priorDistribution.c_str(), _k->_variables[i]->_name.c_str());
   }
 }
 
-void korali::problem::Hierarchical::evaluateLogPrior(korali::Sample &sample)
+void Hierarchical::evaluateLogPrior(Sample &sample)
 {
   double logPrior = 0.0;
 
@@ -28,15 +32,15 @@ void korali::problem::Hierarchical::evaluateLogPrior(korali::Sample &sample)
   sample["logPrior"] = logPrior;
 }
 
-void korali::problem::Hierarchical::evaluateLogPosterior(korali::Sample &sample)
+void Hierarchical::evaluateLogPosterior(Sample &sample)
 {
   int sampleId = sample["Sample Id"];
   evaluateLogPrior(sample);
 
-  if (sample["logPrior"] == -korali::Inf)
+  if (sample["logPrior"] == -Inf)
   {
-    sample["logLikelihood"] = -korali::Inf;
-    sample["logPosterior"] = -korali::Inf;
+    sample["logLikelihood"] = -Inf;
+    sample["logPosterior"] = -Inf;
   }
   else
   {
@@ -45,13 +49,13 @@ void korali::problem::Hierarchical::evaluateLogPosterior(korali::Sample &sample)
     double logLikelihood = sample["logLikelihood"];
     double logPosterior = logPrior + logLikelihood;
 
-    if (std::isnan(logPosterior) == true) korali::Logger::logError("Sample %d returned NaN logPosterior evaluation.\n", sampleId);
+    if (std::isnan(logPosterior) == true) KORALI_LOG_ERROR("Sample %d returned NaN logPosterior evaluation.\n", sampleId);
 
     sample["logPosterior"] = logPrior + logLikelihood;
   }
 }
 
-bool korali::problem::Hierarchical::isSampleFeasible(korali::Sample &sample)
+bool Hierarchical::isSampleFeasible(Sample &sample)
 {
   for (size_t i = 0; i < sample["Parameters"].size(); i++)
     if (isfinite(_k->_distributions[_k->_variables[i]->_distributionIndex]->getLogDensity(sample["Parameters"][i])) == false)
@@ -63,9 +67,13 @@ bool korali::problem::Hierarchical::isSampleFeasible(korali::Sample &sample)
   return true;
 }
 
-void korali::problem::Hierarchical::evaluate(korali::Sample &sample)
+void Hierarchical::evaluate(Sample &sample)
 {
   evaluateLogPosterior(sample);
   sample["P(x)"] = sample["logPosterior"];
   sample["F(x)"] = sample["logPosterior"];
 }
+
+} // namespace problem
+
+} // namespace korali

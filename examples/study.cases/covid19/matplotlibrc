@@ -1,0 +1,10 @@
+# matplotlib settings used for korali plotter
+backend                       : Agg
+lines.markersize              : 4
+boxplot.flierprops.markersize : 4
+boxplot.meanprops.markersize  : 4
+text.usetex                   : True
+font.size                     : 16.0
+figure.titlesize              : 32     # hard coded in the korali plotter, can not change here
+figure.titleweight            : normal # hard coded in the korali plotter, can not change here
+figure.dpi                    : 300

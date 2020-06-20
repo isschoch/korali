@@ -1,27 +1,39 @@
 #include "modules/distribution/univariate/normal/normal.hpp"
 #include "modules/experiment/experiment.hpp"
 
-double korali::distribution::univariate::Normal::getDensity(double x)
+namespace korali
+{
+namespace distribution
+{
+namespace univariate
+{
+double Normal::getDensity(const double x) const
 {
   double y = (x - _mean) / _standardDeviation;
   return gsl_sf_exp(-0.5 * y * y) / _normalization;
 }
 
-double korali::distribution::univariate::Normal::getLogDensity(double x)
+double Normal::getLogDensity(const double x) const
 {
   double d = (x - _mean) / _standardDeviation;
   return _logNormalization - 0.5 * d * d;
 }
 
-double korali::distribution::univariate::Normal::getRandomNumber()
+double Normal::getRandomNumber()
 {
   return _mean + gsl_ran_gaussian(_range, _standardDeviation);
 }
 
-void korali::distribution::univariate::Normal::updateDistribution()
+void Normal::updateDistribution()
 {
-  if (_standardDeviation <= 0.0) korali::Logger::logError("Incorrect Standard Deviation parameter of Normal distribution: %f.\n", _standardDeviation);
+  if (_standardDeviation <= 0.0) KORALI_LOG_ERROR("Incorrect Standard Deviation parameter of Normal distribution: %f.\n", _standardDeviation);
 
   _normalization = M_SQRT2 * M_SQRTPI * _standardDeviation;
   _logNormalization = -0.5 * gsl_sf_log(2 * M_PI) - gsl_sf_log(_standardDeviation);
 }
+
+} // namespace univariate
+
+} // namespace distribution
+
+} // namespace korali

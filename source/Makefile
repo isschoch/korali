@@ -1,17 +1,25 @@
 include Makefile.conf
 # ==============================================================================
-WARNINGFLAGS = -Wno-deprecated-declarations -Wfatal-errors
-MACOS_CXX = clang++
-ifeq ($(CXX),$(MACOS_CXX))
-   WARNINGFLAGS += -Wno-self-assign-field -Wno-dangling-else
-endif
+WARNINGFLAGS += -Wall -Wno-deprecated-declarations -Wno-cast-function-type -Wno-parentheses -Wfatal-errors
 
 # ==============================================================================
-CXXFLAGS  = -g $(OPTFLAGS) $(GSLCFLAGS) $(CXXARCH) $(WARNINGFLAGS)
-CXXFLAGS += -I. -I./external
-CXXFLAGS += $(PYBIND11INCLUDES) $(MPIFLAGS) $(ONEDNNCFLAGS)
+CXXFLAGS  = -g $(OPTFLAGS)  $(CXXARCH) $(WARNINGFLAGS)
+CXXFLAGS += -I. -I./external  
+CXXFLAGS += $(MPIFLAGS)
+CXXFLAGS += $(EIGENCFLAGS) 
+CXXFLAGS += $(GSLCFLAGS)
+CXXFLAGS += $(RTNORMCFLAGS)
+CXXFLAGS += $(ONEDNNCFLAGS)
+CXXFLAGS += $(LIBGPCFLAGS)
+CXXFLAGS += $(LIBCOCFLAGS)
+CXXFLAGS += $(PYBIND11INCLUDES)
 
-LDFLAGS = $(SHAREDLIB_FLAG) -L$(GSLPREFIX)/lib -Wl,-rpath -Wl,$(GSLPREFIX)/lib $(GSLLIBS) $(ONEDNNLDFLAGS)
+LDFLAGS = $(SHAREDLIB_FLAG)
+LDFLAGS += $(RTNORMLIBS)
+LDFLAGS += $(GSLLIBS) 
+LDFLAGS += $(ONEDNNLIBS)
+LDFLAGS += $(LIBGPLIBS)
+LDFLAGS += $(LIBCOLIBS)
 LDFLAGS += $(PYBIND11LIBS)
 
 DEPFLAGS = -MT $@ -MD -MP -MF $(DEPDIR)/$*.Td

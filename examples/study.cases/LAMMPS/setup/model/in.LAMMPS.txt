@@ -1,0 +1,81 @@
+# -var Tset $T1 -var sigma $sigmalj -var epsilon $epsilonlj -var M $M -var DensSet $DensSet
+#-----------------------------------------------------------------
+#----------------------------UNITS--------------------------------
+#-----------------------------------------------------------------
+#mass=g/mole, d = A, t = fs, E = Kcal/mole, v = A/fs, f = Kcal/mole-A, M = Kcal/mole
+#T = K, p = atm, dynamic viscosity = Poise, e = e0, density = g/cm^3
+units real
+variable nAvog equal 6.0221415e23 # Avogadro's number
+variable A3_in_cm3 equal 1e-24 # Angstrom^3 in cm^3
+variable A_in_m equal 1e-10 # Angstrom in meter
+variable atm_in_Pa equal 101325 # note: 1 Pa = 1 N/m^2
+variable N_in_mN equal 1e3 # Newton in milliNewton
+variable convFac equal ${A_in_m}*${atm_in_Pa}*${N_in_mN}
+#-----------------------------------------------------------------
+#-------------------------LENGTH----------------------------------
+#-----------------------------------------------------------------
+variable Nprod		equal 	0.5e6		#0.5e6=1ns
+
+variable Nf 		equal 	${Nprod}/500	#1e3=2ps   print averages 
+variable Nr 		equal 	10		#take 10 saples
+variable Ne 		equal 	${Nf}/${Nr}	#every # timesteps
+#-----------------------------------------------------------------
+#-------------------------DEF MODEL-------------------------------
+#-----------------------------------------------------------------
+atom_style full
+read_data initial.txt
+
+#variable M		equal	1.0
+variable MoleMass	equal	${M}*18.0153
+#variable sigma		equal	3.4
+#variable epsilon  	equal	0.28
+variable rcut		equal	${sigma}*3.0
+variable skin		equal	${sigma}*0.7
+variable T_coup		equal	100.0	#fs
+variable P_coup		equal	1000.0	#fs
+
+mass 1 ${MoleMass} # LJ
+pair_style lj/cut ${rcut}
+pair_coeff 1 1 ${epsilon} ${sigma}
+
+neighbor ${skin} bin
+neigh_modify every 1 delay 0 check yes
+#-----------------------------------------------------------------
+#-------------------------TD STATE--------------------------------
+#-----------------------------------------------------------------
+#variable Tset 		equal 	298.0
+variable Pset		equal	1.0
+#variable DensSet 	equal 	0.997
+#-----------------------------------------------------------------
+#------------------------- EQU NPT -------------------------------
+#-----------------------------------------------------------------
+reset_timestep 0
+timestep 2.0				#2.0fs
+
+fix NPT all npt temp ${Tset} ${Tset} ${T_coup} iso ${Pset} ${Pset} ${P_coup}
+#-----------------------------------------------------------------
+#-------------------------ANALYSIS--------------------------------
+#-----------------------------------------------------------------
+#TEMPERATURE
+compute T all temp
+fix TAve all ave/time ${Ne} ${Nr} ${Nf} c_T 
+
+#PRESSURE
+variable P equal press
+fix PAve all ave/time ${Ne} ${Nr} ${Nf} v_P 
+
+#DENSITY
+variable Dens equal density
+fix DensAve all ave/time ${Ne} ${Nr} ${Nf} v_Dens file density.txt
+
+#-----------------------------------------------------------------
+#----------------------------RUN----------------------------------
+#-----------------------------------------------------------------
+variable timeps equal time/1000
+thermo_style custom v_timeps temp f_TAve press f_PAve density f_DensAve
+thermo_modify flush yes
+thermo ${Nf}
+
+run ${Nprod}
+
+

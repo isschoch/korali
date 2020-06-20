@@ -17,22 +17,22 @@ constraints=(
 # CCMA-ES Termination Criterion Tests
 #################################################
 
-logEcho "[Korali] Beginning CMA-ES termination criterion tests"
+echo "[Korali] Beginning CMA-ES termination criterion tests"
 
 for c in "${constraints[@]}"
 do
 
-  logEcho "-------------------------------------"
-  logEcho "Testing Constraints: ${c}"
-  logEcho "Running File: run-ccmaes.py"
+  echo "-------------------------------------"
+  echo "Testing Constraints: ${c}"
+  echo "Running File: run-ccmaes.py"
 
-  python3 ./run-ccmaes.py --constraint "${c}" >> $logFile 2>&1
+  python3 ./run-ccmaes.py --constraint "${c}"
   check_result
 
-  log "[Korali] Removing results..."
-  rm -rf "_korali_result" >> $logFile 2>&1
+  echo "[Korali] Removing results..."
+  rm -rf "_korali_result"
   check_result
 
-  logEcho "-------------------------------------"
+  echo "-------------------------------------"
 
 done

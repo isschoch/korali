@@ -14,11 +14,17 @@ Korali's Documentation
    
 .. toctree::
    :maxdepth: 2
-   :caption: Tutorials
-    
-   tutorials/basic
-   tutorials/advanced
-   tutorials/examples
+   :glob:
+   :caption: Examples
+
+   examples/*
+
+.. toctree::
+   :maxdepth: 2
+   :glob:
+   :caption: Features
+
+   features/*
 
 .. toctree::
    :maxdepth: 2

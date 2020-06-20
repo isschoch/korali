@@ -1,6 +1,10 @@
 #include "modules/problem/reinforcementLearning/reinforcementLearning.hpp"
 
-void korali::problem::ReinforcementLearning::initialize()
+namespace korali
+{
+namespace problem
+{
+void ReinforcementLearning::initialize()
 {
   // If it has already been initialized, reset generation and skip initialization.
   if (_isInitialized == true) return;
@@ -10,24 +14,24 @@ void korali::problem::ReinforcementLearning::initialize()
   {
     if (_k->_variables[i]->_parameterSpace == "Continuous" || _k->_variables[i]->_parameterSpace == "Discrete")
     {
-      if (_k->_variables[i]->_parameterVector.size() > 0) korali::Logger::logError("Variable %lu (%s): Parameter Vector is defined, but variable's parameter space is not marked as user-defined.\n", i, _k->_variables[i]->_name.c_str());
-      if (_k->_variables[i]->_lowerBound == korali::Inf) korali::Logger::logError("Variable %lu (%s): Lower bound for continuous/discrete variable is not defined.\n", i, _k->_variables[i]->_name.c_str());
-      if (_k->_variables[i]->_upperBound == -korali::Inf) korali::Logger::logError("Variable %lu (%s): Upper bound for continuous/discrete variable is not defined.\n", i, _k->_variables[i]->_name.c_str());
-      if (_k->_variables[i]->_upperBound <= _k->_variables[i]->_lowerBound) korali::Logger::logError("Variable %lu (%s): Upper bound is lower than lower bound.\n", i, _k->_variables[i]->_name.c_str());
+      if (_k->_variables[i]->_parameterVector.size() > 0) KORALI_LOG_ERROR("Variable %lu (%s): Parameter Vector is defined, but variable's parameter space is not marked as user-defined.\n", i, _k->_variables[i]->_name.c_str());
+      if (_k->_variables[i]->_lowerBound == Inf) KORALI_LOG_ERROR("Variable %lu (%s): Lower bound for continuous/discrete variable is not defined.\n", i, _k->_variables[i]->_name.c_str());
+      if (_k->_variables[i]->_upperBound == -Inf) KORALI_LOG_ERROR("Variable %lu (%s): Upper bound for continuous/discrete variable is not defined.\n", i, _k->_variables[i]->_name.c_str());
+      if (_k->_variables[i]->_upperBound <= _k->_variables[i]->_lowerBound) KORALI_LOG_ERROR("Variable %lu (%s): Upper bound is lower than lower bound.\n", i, _k->_variables[i]->_name.c_str());
     }
 
     if (_k->_variables[i]->_parameterSpace == "Discrete")
     {
-      if (_k->_variables[i]->_granularity <= 0.0) korali::Logger::logError("Variable %lu (%s): Granularity for discrete variable is invalid/not defined.\n", i, _k->_variables[i]->_name.c_str());
-      if (_k->_variables[i]->_granularity > _k->_variables[i]->_upperBound - _k->_variables[i]->_lowerBound) korali::Logger::logError("Variable %lu (%s): Granularity for discrete variable is larger than the [lower,upper] bound space.\n", i, _k->_variables[i]->_name.c_str());
+      if (_k->_variables[i]->_granularity <= 0.0) KORALI_LOG_ERROR("Variable %lu (%s): Granularity for discrete variable is invalid/not defined.\n", i, _k->_variables[i]->_name.c_str());
+      if (_k->_variables[i]->_granularity > _k->_variables[i]->_upperBound - _k->_variables[i]->_lowerBound) KORALI_LOG_ERROR("Variable %lu (%s): Granularity for discrete variable is larger than the [lower,upper] bound space.\n", i, _k->_variables[i]->_name.c_str());
     }
 
     if (_k->_variables[i]->_parameterSpace == "Custom")
     {
-      if (_k->_variables[i]->_granularity > 0.0) korali::Logger::logError("Variable %lu (%s): Granularity is defined, but variable's parameter space is marked as user-defined.\n", i, _k->_variables[i]->_name.c_str());
-      if (_k->_variables[i]->_parameterVector.size() == 0) korali::Logger::logError("Variable %lu (%s): Parameter Vector is not defined for user-defined variable.\n", i, _k->_variables[i]->_name.c_str());
-      if (_k->_variables[i]->_lowerBound != korali::Inf) korali::Logger::logError("Variable %lu (%s): Lower bound for variable is defined, but variable's parameter space is marked as user-defined.\n", i, _k->_variables[i]->_name.c_str());
-      if (_k->_variables[i]->_upperBound != -korali::Inf) korali::Logger::logError("Variable %lu (%s): Upper bound for variable is defined, but variable's parameter space is marked as user-defined.\n", i, _k->_variables[i]->_name.c_str());
+      if (_k->_variables[i]->_granularity > 0.0) KORALI_LOG_ERROR("Variable %lu (%s): Granularity is defined, but variable's parameter space is marked as user-defined.\n", i, _k->_variables[i]->_name.c_str());
+      if (_k->_variables[i]->_parameterVector.size() == 0) KORALI_LOG_ERROR("Variable %lu (%s): Parameter Vector is not defined for user-defined variable.\n", i, _k->_variables[i]->_name.c_str());
+      if (_k->_variables[i]->_lowerBound != Inf) KORALI_LOG_ERROR("Variable %lu (%s): Lower bound for variable is defined, but variable's parameter space is marked as user-defined.\n", i, _k->_variables[i]->_name.c_str());
+      if (_k->_variables[i]->_upperBound != -Inf) KORALI_LOG_ERROR("Variable %lu (%s): Upper bound for variable is defined, but variable's parameter space is marked as user-defined.\n", i, _k->_variables[i]->_name.c_str());
     }
   }
 
@@ -59,8 +63,8 @@ void korali::problem::ReinforcementLearning::initialize()
   _actionVectorSize = _actionVectorIndexes.size();
   _stateVectorSize = _stateVectorIndexes.size();
 
-  if (_actionVectorSize == 0) korali::Logger::logError("No action variables have been defined.\n");
-  if (_stateVectorSize == 0) korali::Logger::logError("No state variables have been defined.\n");
+  if (_actionVectorSize == 0) KORALI_LOG_ERROR("No action variables have been defined.\n");
+  if (_stateVectorSize == 0) KORALI_LOG_ERROR("No state variables have been defined.\n");
 
   _stateCount = 1;
   for (size_t i = 0; i < _stateVectorSize; i++)
@@ -80,27 +84,27 @@ void korali::problem::ReinforcementLearning::initialize()
   _isInitialized = true;
 }
 
-std::vector<double> korali::problem::ReinforcementLearning::getActionFromIndex(const size_t &index)
+std::vector<double> ReinforcementLearning::getActionFromIndex(const size_t &index)
 {
   return extrapolateValuesFromIndex(index, _actionVectorIndexes);
 }
 
-std::vector<double> korali::problem::ReinforcementLearning::getStateFromIndex(const size_t &index)
+std::vector<double> ReinforcementLearning::getStateFromIndex(const size_t &index)
 {
   return extrapolateValuesFromIndex(index, _stateVectorIndexes);
 }
 
-size_t korali::problem::ReinforcementLearning::getIndexFromAction(const std::vector<double> &values)
+size_t ReinforcementLearning::getIndexFromAction(const std::vector<double> &values)
 {
   return interpolateIndexFromValues(values, _actionVectorIndexes);
 }
 
-size_t korali::problem::ReinforcementLearning::getIndexFromState(const std::vector<double> &values)
+size_t ReinforcementLearning::getIndexFromState(const std::vector<double> &values)
 {
   return interpolateIndexFromValues(values, _stateVectorIndexes);
 }
 
-std::vector<double> korali::problem::ReinforcementLearning::extrapolateValuesFromIndex(const size_t &index, const std::vector<size_t> &variableIndexVector)
+std::vector<double> ReinforcementLearning::extrapolateValuesFromIndex(const size_t &index, const std::vector<size_t> &variableIndexVector)
 {
   // Creating storage for new action
   std::vector<double> values(variableIndexVector.size());
@@ -118,7 +122,7 @@ std::vector<double> korali::problem::ReinforcementLearning::extrapolateValuesFro
   return values;
 }
 
-size_t korali::problem::ReinforcementLearning::interpolateIndexFromValues(const std::vector<double> &values, const std::vector<size_t> &variableIndexVector)
+size_t ReinforcementLearning::interpolateIndexFromValues(const std::vector<double> &values, const std::vector<size_t> &variableIndexVector)
 {
   size_t pos = 0;
   size_t multiplier = 1;
@@ -128,7 +132,7 @@ size_t korali::problem::ReinforcementLearning::interpolateIndexFromValues(const 
     double value = values[i];
     size_t index = variableIndexVector[i];
 
-    double minDiff = korali::Inf;
+    double minDiff = Inf;
     size_t valPos = 0;
     for (size_t j = 0; j < _k->_variables[index]->_parameterVector.size(); j++)
     {
@@ -147,7 +151,11 @@ size_t korali::problem::ReinforcementLearning::interpolateIndexFromValues(const 
   return pos;
 }
 
-void korali::problem::ReinforcementLearning::runEnvironment(korali::Sample &sample)
+void ReinforcementLearning::runEnvironment(Sample &sample)
 {
   sample.run(_environmentFunction);
 }
+
+} // namespace problem
+
+} // namespace korali

@@ -1,37 +1,32 @@
 #include "modules/problem/sampling/sampling.hpp"
 
-void korali::problem::Sampling::initialize()
+namespace korali
 {
-  if (_k->_variables.size() == 0) korali::Logger::logError("Sampling Evaluation problems require at least one variable.\n");
+namespace problem
+{
+void Sampling::initialize()
+{
+  if (_k->_variables.size() == 0) KORALI_LOG_ERROR("Sampling Evaluation problems require at least one variable.\n");
 }
 
-void korali::problem::Sampling::evaluate(korali::Sample &sample)
+void Sampling::evaluate(Sample &sample)
 {
   sample.run(_probabilityFunction);
 
-  std::string sampleString = "['P(x)']";
-
-  if (korali::JsonInterface::isDefined(sample._js.getJson(), sampleString) == false)
-    korali::Logger::logError("The %s problem needs a function evaluation. Be sure that you assign a value to the %s attribute in the model definition.\n", _k->_problem->getType().c_str(), sampleString.c_str());
-
-  double evaluation = -korali::Inf;
-  try
-  {
-    evaluation = sample["P(x)"];
-  }
-  catch (const std::exception &e)
-  {
-    korali::Logger::logError("Missing or incorrect value of 'P(x)' returned by the sample evaluation. \n   + Solution: Make sure your model is storing its probability density evaluation, e.g., sample[\"P(x)\"] = value(s).\n   + Cause: %s\n", e.what());
-  }
+  auto evaluation = KORALI_GET(double, sample, "P(x)");
 
   // TODO: Check 0 <= P(x) <= 1
   // TODO: Use Lognormalization
 
   // If result is not a finite number, objective function evaluates to -Infinity
   if (std::isnan(evaluation))
-    sample["P(x)"] = -korali::Inf;
+    sample["P(x)"] = -Inf;
   else
     sample["P(x)"] = evaluation;
 
   sample["F(x)"] = sample["P(x)"];
 }
+
+} // namespace problem
+
+} // namespace korali

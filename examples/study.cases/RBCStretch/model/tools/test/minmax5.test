@@ -1,0 +1,5 @@
+#! /bin/sh
+
+# TEST: minmax5
+./stretchForce.py --mesh ../data/rbc_mesh.off --fraction 0.05 --force 1 --out forces.out.txt
+

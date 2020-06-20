@@ -4,17 +4,17 @@ source ../functions.sh
 
 ############# STEP 1 ##############
 
-logEcho "[Korali] Beginning sampling statistics tests..."
+echo "[Korali] Beginning sampling statistics tests..."
 
 for file in run*.py
 do
-  logEcho "-------------------------------------"
-  logEcho " Running $file"
-  logEcho "-------------------------------------"
+  echo "-------------------------------------"
+  echo " Running $file"
+  echo "-------------------------------------"
   ./"$file" >> $logFile
   check_result
 done
 
-log "[Korali] Removing results..."
-rm -rf _result_run-* >> $logFile 2>&1
+echo "[Korali] Removing results..."
+rm -rf _result_run-* 
 check_result

@@ -4,29 +4,31 @@
 #include <stdio.h>
 #include <stdlib.h>
 
-korali::Logger::Logger()
+namespace korali
+{
+Logger::Logger()
 {
   __verbosityLevel = 3;
   __outputFile = stdout;
 }
 
-korali::Logger::Logger(const std::string verbosityLevel, FILE *file)
+Logger::Logger(const std::string verbosityLevel, FILE *file)
 {
   __verbosityLevel = getVerbosityLevel(verbosityLevel);
   __outputFile = file;
 }
 
-void korali::Logger::setVerbosityLevel(const std::string verbosityLevel)
+void Logger::setVerbosityLevel(const std::string verbosityLevel)
 {
   __verbosityLevel = getVerbosityLevel(verbosityLevel);
 }
 
-void korali::Logger::setConsoleOutputFile(FILE *file)
+void Logger::setConsoleOutputFile(FILE *file)
 {
   __outputFile = file;
 }
 
-size_t korali::Logger::getVerbosityLevel(const std::string verbosityLevel)
+size_t Logger::getVerbosityLevel(const std::string verbosityLevel)
 {
   if (verbosityLevel == "Silent") return 0;
   if (verbosityLevel == "Minimal") return 1;
@@ -35,7 +37,7 @@ size_t korali::Logger::getVerbosityLevel(const std::string verbosityLevel)
   return 0;
 }
 
-bool korali::Logger::isEnoughVerbosity(const std::string verbosityLevel)
+bool Logger::isEnoughVerbosity(const std::string verbosityLevel)
 {
   size_t messageLevel = getVerbosityLevel(verbosityLevel);
 
@@ -43,7 +45,7 @@ bool korali::Logger::isEnoughVerbosity(const std::string verbosityLevel)
   return false;
 }
 
-void korali::Logger::logData(const std::string verbosityLevel, const char *format, ...)
+void Logger::logData(const std::string verbosityLevel, const char *format, ...)
 {
   if (isEnoughVerbosity(verbosityLevel) == false) return;
 
@@ -57,7 +59,7 @@ void korali::Logger::logData(const std::string verbosityLevel, const char *forma
   free(outstr);
 }
 
-void korali::Logger::logInfo(const std::string verbosityLevel, const char *format, ...)
+void Logger::logInfo(const std::string verbosityLevel, const char *format, ...)
 {
   if (isEnoughVerbosity(verbosityLevel) == false) return;
 
@@ -74,7 +76,7 @@ void korali::Logger::logInfo(const std::string verbosityLevel, const char *forma
   free(outstr);
 }
 
-void korali::Logger::logWarning(const std::string verbosityLevel, const char *format, ...)
+void Logger::logWarning(const std::string verbosityLevel, const char *format, ...)
 {
   if (isEnoughVerbosity(verbosityLevel) == false) return;
 
@@ -100,29 +102,22 @@ void korali::Logger::logWarning(const std::string verbosityLevel, const char *fo
   free(outstr);
 }
 
-void korali::Logger::logError(const char *format, ...)
-{
-  std::string newFormat = "[Korali] Error: ";
-  newFormat += format;
-
-  char *outstr = 0;
-  va_list ap;
-  va_start(ap, format);
-  vasprintf(&outstr, newFormat.c_str(), ap);
-
-  newFormat = outstr;
-  free(outstr);
-  throw std::runtime_error(newFormat.c_str());
-}
-
-void korali::Logger::throwException(const char *format, ...)
+void Logger::logError [[noreturn]] (const char *fileName, const int lineNumber, const char *format, ...)
 {
   char *outstr = 0;
   va_list ap;
   va_start(ap, format);
   vasprintf(&outstr, format, ap);
 
-  std::string errorMsg = outstr;
+  std::string outString = outstr;
   free(outstr);
-  throw std::runtime_error(errorMsg.c_str());
+
+  char info[1024];
+
+  snprintf(info, sizeof(info) - 1, " + From %s:%d\n", fileName, lineNumber);
+  outString += info;
+
+  throw std::runtime_error(outString.c_str());
 }
+
+} // namespace korali

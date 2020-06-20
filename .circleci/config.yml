@@ -17,75 +17,119 @@ jobs:
       - checkout
 
       - run:
+          name: Get Submodules
+          command: git submodule init;
+                   git submodule update --remote
+                   
+      - run:
           name: install MPI
           command: sudo apt-get install mpich;
                    echo 'export MPICXX=mpicxx' >> $BASH_ENV
 
       - restore_cache:
           keys:
-            - cache-linux-doxygen-v6
+            - cache-linux-doxygen-v10
             
       - restore_cache:
           keys:
-            - cache-linux-llvm-v6
+            - cache-linux-llvm-v10
             
       - restore_cache:
           keys:
-            - cache-linux-cmake-v6
+            - cache-linux-cmake-v10
+
+      - restore_cache:
+          keys:
+            - cache-linux-eigen-v10
+                  
+      - restore_cache:
+          keys:
+            - cache-linux-gsl-v10
+            
+      - restore_cache:
+          keys:
+            - cache-linux-oneDNN-v10
       
       - restore_cache:
           keys:
-            - cache-linux-gsl-v6
+            - cache-linux-libGP-v10
             
       - restore_cache:
           keys:
-            - cache-linux-oneDNN-v6
+            - cache-linux-rtnorm-v10
             
       - run:
           name: Install Doxygen
-          command: ./prereqs/install_doxygen.sh
+          command: ./external/install_doxygen.sh
           
       - save_cache:
-          key: cache-linux-doxygen-v6
+          key: cache-linux-doxygen-v10
           paths:
-            - "~/korali/prereqs/_doxygen/install"
+            - "~/korali/external/_doxygen/install"
                   
       - run:
           name: Install LLVM (clang-format)
-          command: ./prereqs/install_clang.sh
+          command: ./external/install_clang.sh
           
       - save_cache:
-          key: cache-linux-llvm-v6
+          key: cache-linux-llvm-v10
           paths:
-            - "~/korali/prereqs/_llvm/install"
+            - "~/korali/external/_llvm/install"
             
       - run:
           name: Install CMake
-          command: ./prereqs/install_CMake.sh
+          command: ./external/install_CMake.sh
           
       - save_cache:
-          key: cache-linux-cmake-v6
+          key: cache-linux-cmake-v10
           paths:
-            - "~/korali/prereqs/CMake/install"
+            - "~/korali/external/CMake/install"
 
       - run:
-          name: Install GSL
-          command: ./prereqs/install_gsl.sh
+          name: Install Eigen
+          command: ./external/install_eigen.sh
           
       - save_cache:
-          key: cache-linux-gsl-v6
+          key: cache-linux-eigen-v10
           paths:
-            - "~/korali/prereqs/GSL/install"
+            - "~/korali/external/eigen/install"
+            
+      - run:
+          name: Install GSL
+          command: ./external/install_gsl.sh
+          
+      - save_cache:
+          key: cache-linux-gsl-v10
+          paths:
+            - "~/korali/external/GSL/install"
       
       - run:
           name: Install oneDNN
-          command: ./prereqs/install_oneDNN.sh
+          command: ./external/install_oneDNN.sh
           
       - save_cache:
-          key: cache-linux-oneDNN-v6
+          key: cache-linux-oneDNN-v10
           paths:
-            - "~/korali/prereqs/oneDNN/install"
+            - "~/korali/external/oneDNN/install"
                                   
+      - run:
+          name: Install LibGP
+          command: ./external/install_libGP.sh
+          
+      - save_cache:
+          key: cache-linux-libGP-v10
+          paths:
+            - "~/korali/external/libGP/install"
+            
+      - run:
+          name: Install rtnorm
+          command: ./external/install_rtnorm.sh
+                    
+      - save_cache:
+          key: cache-linux-rtnorm-v10
+          paths:
+            - "~/korali/external/rtnorm/install"
+            
       - run:
           name: build Korali
           command: ./install --prereqs --jobs=8
@@ -93,12 +137,12 @@ jobs:
       - run:
           name: run tests
           command: pushd tests; ./run_all_tests.sh; popd
-      
+
       - store_artifacts:
           path: ~/korali/install.log
 
       - store_artifacts:
-          path: ~/korali/docs/test.log
+          path: ~/korali/tests/test.log
 
   build_macos:
     macos:
@@ -107,7 +151,12 @@ jobs:
     steps:
 
       - checkout
-
+      
+      - run:
+          name: Get Submodules
+          command: git submodule init;
+                   git submodule update --remote
+                   
       - run:
           name: Install MacOS dependencies
           command: HOMEBREW_NO_AUTO_UPDATE=1 brew install wget;
@@ -117,69 +166,108 @@ jobs:
    
       - restore_cache:
           keys:
-            - cache-macos-doxygen-v6
+            - cache-macos-doxygen-v10
             
       - restore_cache:
           keys:
-            - cache-macos-llvm-v6
+            - cache-macos-llvm-v10
             
       - restore_cache:
           keys:
-            - cache-macos-cmake-v6
-           
+            - cache-macos-cmake-v10
+        
       - restore_cache:
           keys:
-            - cache-macos-gsl-v6
+            - cache-macos-eigen-v10
             
       - restore_cache:
           keys:
-            - cache-macos-oneDNN-v6
+            - cache-macos-gsl-v10
             
+      - restore_cache:
+          keys:
+            - cache-macos-oneDNN-v10
+            
+      - restore_cache:
+          keys:
+            - cache-macos-libGP-v10
+            
+      - restore_cache:
+          keys:
+            - cache-macos-rtnorm-v10
+      
       - run:
           name: Install Doxygen
-          command: ./prereqs/install_doxygen.sh
+          command: ./external/install_doxygen.sh
           
       - save_cache:
-          key: cache-macos-doxygen-v6
+          key: cache-macos-doxygen-v10
           paths:
-            - "~/korali/prereqs/_doxygen/install"
+            - "~/korali/external/_doxygen/install"
                   
       - run:
           name: Install LLVM (clang-format)
-          command: ./prereqs/install_clang.sh
+          command: ./external/install_clang.sh
           
       - save_cache:
-          key: cache-macos-llvm-v6
+          key: cache-macos-llvm-v10
           paths:
-            - "~/korali/prereqs/_llvm/install"
+            - "~/korali/external/_llvm/install"
             
       - run:
           name: Install CMake
-          command: ./prereqs/install_CMake.sh 
+          command: ./external/install_CMake.sh 
+        
+      - run:
+          name: Install Eigen
+          command: ./external/install_eigen.sh
           
       - save_cache:
-          key: cache-macos-cmake-v6
+          key: cache-macos-eigen-v10
           paths:
-            - "~/korali/prereqs/CMake/install"
+            - "~/korali/external/eigen/install"
+              
+      - save_cache:
+          key: cache-macos-cmake-v10
+          paths:
+            - "~/korali/external/CMake/install"
 
       - run:
           name: Install GSL
-          command: ./prereqs/install_gsl.sh
+          command: ./external/install_gsl.sh
           
       - save_cache:
-          key: cache-macos-gsl-v6
+          key: cache-macos-gsl-v10
           paths:
-            - "~/korali/prereqs/GSL/install"
+            - "~/korali/external/GSL/install"
       
       - run:
           name: Install oneDNN
-          command: ./prereqs/install_oneDNN.sh
+          command: ./external/install_oneDNN.sh
           
       - save_cache:
-          key: cache-macos-oneDNN-v6
+          key: cache-macos-oneDNN-v10
           paths:
-            - "~/korali/prereqs/oneDNN/install"
+            - "~/korali/external/oneDNN/install"
                             
+      - run:
+          name: Install LibGP
+          command: ./external/install_libGP.sh
+
+      - save_cache:
+          key: cache-macos-libGP-v10
+          paths:
+            - "~/korali/external/libgp/install"
+            
+      - run:
+          name: Install rtnorm
+          command: ./external/install_rtnorm.sh
+                    
+      - save_cache:
+          key: cache-macos-rtnorm-v10
+          paths:
+            - "~/korali/external/rtnorm/install"
+                  
       - run:
           name: build Korali
           command: ./install --prereqs --jobs=4
@@ -189,7 +277,7 @@ jobs:
           command: pushd tests; ./run_all_tests.sh; popd
 
       - store_artifacts:
-           path: ~/korali/install.log
+          path: ~/korali/install.log
 
       - store_artifacts:
-          path: ~/korali/docs/test.log
+          path: ~/korali/tests/test.log

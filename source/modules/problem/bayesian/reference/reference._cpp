@@ -6,28 +6,29 @@
 #include <gsl/gsl_matrix.h>
 #include <gsl/gsl_sf_gamma.h>
 
-void korali::problem::bayesian::Reference::initialize()
+namespace korali
 {
-  korali::problem::Bayesian::initialize();
+namespace problem
+{
+namespace bayesian
+{
+void Reference::initialize()
+{
+  Bayesian::initialize();
 
-  if (_referenceData.size() == 0) korali::Logger::logError("Bayesian (%s) problems require defining reference data.\n", _likelihoodModel.c_str());
+  if (_referenceData.size() == 0) KORALI_LOG_ERROR("Bayesian (%s) problems require defining reference data.\n", _likelihoodModel.c_str());
 
-  if (_k->_variables.size() < 1) korali::Logger::logError("Bayesian (%s) inference problems require at least one variable.\n", _likelihoodModel.c_str());
+  if (_k->_variables.size() < 1) KORALI_LOG_ERROR("Bayesian (%s) inference problems require at least one variable.\n", _likelihoodModel.c_str());
 }
 
-void korali::problem::bayesian::Reference::evaluateLoglikelihood(korali::Sample &sample)
+void Reference::evaluateLoglikelihood(Sample &sample)
 {
   sample.run(_computationalModel);
 
-  try
-  {
-    if (sample["Reference Evaluations"].size() != _referenceData.size())
-      korali::Logger::logError("This Bayesian (%s) problem requires a %lu-sized result array. Provided: %lu.\n", _likelihoodModel.c_str(), _referenceData.size(), sample["Reference Evaluations"].size());
-  }
-  catch (const std::exception &e)
-  {
-    korali::Logger::logError("Missing or incorrect value of 'Reference Evaluations' returned by the sample evaluation. \n   + Solution: Make sure your model is storing its reference evaluations, e.g., sample[\"Reference Evaluations\"] = value(s).\n   + Cause: %s\n", e.what());
-  }
+  auto refEvals = KORALI_GET(std::vector<double>, sample, "Reference Evaluations");
+
+  if (refEvals.size() != _referenceData.size())
+    KORALI_LOG_ERROR("This Bayesian (%s) problem requires a %lu-sized result array. Provided: %lu.\n", _likelihoodModel.c_str(), _referenceData.size(), refEvals.size());
 
   if (_likelihoodModel == "Normal")
     loglikelihoodNormal(sample);
@@ -36,10 +37,10 @@ void korali::problem::bayesian::Reference::evaluateLoglikelihood(korali::Sample 
   else if (_likelihoodModel == "Positive Normal")
     loglikelihoodPositiveNormal(sample);
   else
-    korali::Logger::logError("Bayesian problem (%s) not recognized.\n", _likelihoodModel.c_str());
+    KORALI_LOG_ERROR("Bayesian problem (%s) not recognized.\n", _likelihoodModel.c_str());
 }
 
-double korali::problem::bayesian::Reference::compute_normalized_sse(std::vector<double> f, std::vector<double> g, std::vector<double> y)
+double Reference::compute_normalized_sse(std::vector<double> f, std::vector<double> g, std::vector<double> y)
 {
   double sse = 0.;
   for (size_t i = 0; i < y.size(); i++)
@@ -50,87 +51,72 @@ double korali::problem::bayesian::Reference::compute_normalized_sse(std::vector<
   return sse;
 }
 
-void korali::problem::bayesian::Reference::loglikelihoodNormal(korali::Sample &sample)
+void Reference::loglikelihoodNormal(Sample &sample)
 {
-  try
-  {
-    if (sample["Standard Deviation"].size() != _referenceData.size())
-      korali::Logger::logError("This Bayesian (%s) problem requires a %lu-sized Standard Deviation array. Provided: %lu.\n", _likelihoodModel.c_str(), _referenceData.size(), sample["Standard Deviation"].size());
-  }
-  catch (const std::exception &e)
-  {
-    korali::Logger::logError("Missing or incorrect value of 'Standard Deviation' returned by the sample evaluation. \n   + Solution: Make sure your model is storing its standard deviation, e.g., sample[\"Standard Deviation\"] = value(s).\n   + Cause: %s\n", e.what());
-  }
+  auto refEvals = KORALI_GET(std::vector<double>, sample, "Reference Evaluations");
+  auto stdDevs = KORALI_GET(std::vector<double>, sample, "Standard Deviation");
 
-  double sse = -korali::Inf;
-  try
-  {
-    sse = compute_normalized_sse(sample["Reference Evaluations"], sample["Standard Deviation"], _referenceData);
-  }
-  catch (const std::exception &e)
-  {
-    korali::Logger::logError("Missing or incorrect value of 'Standard Deviation' or 'Reference Evaluations' returned by the model.\n   + Cause: %s\n", e.what());
-  }
+  if (stdDevs.size() != _referenceData.size())
+    KORALI_LOG_ERROR("This Bayesian (%s) problem requires a %lu-sized Standard Deviation array. Provided: %lu.\n", _likelihoodModel.c_str(), _referenceData.size(), stdDevs.size());
+
+  if (refEvals.size() != _referenceData.size())
+    KORALI_LOG_ERROR("This Bayesian (%s) problem requires a %lu-sized Reference Evaluations array. Provided: %lu.\n", _likelihoodModel.c_str(), _referenceData.size(), refEvals.size());
+
+  double sse = -Inf;
+  sse = compute_normalized_sse(refEvals, stdDevs, _referenceData);
 
   double loglike = 0.;
-  double sdev;
-  for (size_t i = 0; i < sample["Standard Deviation"].size(); i++)
+  for (size_t i = 0; i < stdDevs.size(); i++)
   {
-    try
-    {
-      sdev = sample["Standard Deviation"][i];
-    }
-    catch (const std::exception &e)
-    {
-      korali::Logger::logError("Missing or incorrect value of 'Standard Deviation' at position %lu returned by the sample evaluation. \n   + Solution: Make sure your model is storing its standard deviation, e.g., sample[\"Standard Deviation\"] = value(s).\n   + Cause: %s\n", e.what());
-    }
-
-    if (sdev <= 0.0) korali::Logger::logError("Negative or zero value (%lf) detected for the Standard Deviation.\n", sdev);
-    loglike -= log(sdev);
+    if (stdDevs[i] <= 0.0) KORALI_LOG_ERROR("Negative or zero value (%lf) detected for the Standard Deviation.\n", stdDevs[i]);
+    loglike -= log(stdDevs[i]);
   }
 
   loglike -= 0.5 * (_referenceData.size() * _log2pi + sse);
   sample["logLikelihood"] = loglike;
 }
 
-void korali::problem::bayesian::Reference::loglikelihoodPositiveNormal(korali::Sample &sample)
+void Reference::loglikelihoodPositiveNormal(Sample &sample)
 {
-  double sse = compute_normalized_sse(sample["Reference Evaluations"], sample["Standard Deviation"], _referenceData);
+  auto refEvals = KORALI_GET(std::vector<double>, sample, "Reference Evaluations");
+  auto stdDevs = KORALI_GET(std::vector<double>, sample, "Standard Deviation");
+
+  if (stdDevs.size() != _referenceData.size())
+    KORALI_LOG_ERROR("This Bayesian (%s) problem requires a %lu-sized Standard Deviation array. Provided: %lu.\n", _likelihoodModel.c_str(), _referenceData.size(), stdDevs.size());
+
+  if (refEvals.size() != _referenceData.size())
+    KORALI_LOG_ERROR("This Bayesian (%s) problem requires a %lu-sized Reference Evaluations array. Provided: %lu.\n", _likelihoodModel.c_str(), _referenceData.size(), refEvals.size());
+
+  double sse = compute_normalized_sse(refEvals, stdDevs, _referenceData);
+
   double loglike = 0.;
-  for (size_t i = 0; i < sample["Standard Deviation"].size(); i++)
+  for (size_t i = 0; i < stdDevs.size(); i++)
   {
-    double m = -korali::Inf;
-    try
-    {
-      sample["Reference Evaluations"][i];
-    }
-    catch (const std::exception &e)
-    {
-      korali::Logger::logError("Missing or incorrect value of 'Reference Evaluations' at position %lu returned by the sample evaluation. \n   + Solution: Make sure your model is storing its reference evaluations, e.g., sample[\"Reference Evaluations\"] = value(s).\n   + Cause: %s\n", i, e.what());
-    }
+    double m = refEvals[i];
+    double s = stdDevs[i];
 
-    double s = -korali::Inf;
-    try
-    {
-      s = sample["Standard Deviation"][i];
-    }
-    catch (const std::exception &e)
-    {
-      korali::Logger::logError("Missing or incorrect value of 'Standard Deviation' at position %lu returned by the sample evaluation. \n   + Solution: Make sure your model is storing its reference evaluations, e.g., sample[\"Reference Evaluations\"] = value(s).\n   + Cause: %s\n", i, e.what());
-    }
-
-    if (s <= 0.0) korali::Logger::logError("Negative or zero value (%lf) detected for the Standard Deviation.\n", s);
-    if (m < 0.0) korali::Logger::logError("Negative value (%lf) detected in Reference Evaluation.\n", m);
+    if (s <= 0.0) KORALI_LOG_ERROR("Negative or zero value (%lf) detected for the Standard Deviation.\n", s);
+    if (m < 0.0) KORALI_LOG_ERROR("Negative value (%lf) detected in Reference Evaluation.\n", m);
 
     loglike -= log(s);
     loglike -= log(1. - gsl_cdf_gaussian_P(-m, s));
   }
+
   loglike += -0.5 * (_referenceData.size() * _log2pi + sse);
   sample["logLikelihood"] = loglike;
 }
 
-void korali::problem::bayesian::Reference::loglikelihoodNegativeBinomial(korali::Sample &sample)
+void Reference::loglikelihoodNegativeBinomial(Sample &sample)
 {
+  auto refEvals = KORALI_GET(std::vector<double>, sample, "Reference Evaluations");
+  auto dispersion = KORALI_GET(std::vector<double>, sample, "Dispersion");
+
+  if (refEvals.size() != _referenceData.size())
+    KORALI_LOG_ERROR("This Bayesian (%s) problem requires a %lu-sized Reference Evaluations array. Provided: %lu.\n", _likelihoodModel.c_str(), _referenceData.size(), refEvals.size());
+
+  if (dispersion.size() != _referenceData.size())
+    KORALI_LOG_ERROR("This Bayesian (%s) problem requires a %lu-sized Dispersion array. Provided: %lu.\n", _likelihoodModel.c_str(), _referenceData.size(), dispersion.size());
+
   size_t N = _referenceData.size();
   double loglike = 0.0;
 
@@ -138,31 +124,15 @@ void korali::problem::bayesian::Reference::loglikelihoodNegativeBinomial(korali:
   {
     loglike -= gsl_sf_lngamma(_referenceData[i] + 1.);
 
-    double m = -korali::Inf;
-    try
-    {
-      m = sample["Reference Evaluations"][i];
-    }
-    catch (const std::exception &e)
-    {
-      korali::Logger::logError("Missing or incorrect value of 'Reference Evaluations' at position %lu returned by the sample evaluation. \n   + Solution: Make sure your model is storing its reference evaluations, e.g., sample[\"Reference Evaluations\"] = value(s).\n   + Cause: %s\n", i, e.what());
-    }
+    double m = refEvals[i];
 
     if (m <= 0)
     {
-      sample["logLikelihood"] = -korali::Inf;
+      sample["logLikelihood"] = -Inf;
       return;
     }
 
-    double r = -korali::Inf;
-    try
-    {
-      double r = sample["Dispersion"][i];
-    }
-    catch (const std::exception &e)
-    {
-      korali::Logger::logError("Missing or incorrect value of 'Dispersion' at position %lu returned by the sample evaluation. \n   + Solution: Make sure your model is storing its reference evaluations, e.g., sample[\"Dispersion\"] = value(s).\n   + Cause: %s\n", i, e.what());
-    }
+    double r = dispersion[i];
 
     double p = m / (m + r);
     double y = _referenceData[i];
@@ -176,7 +146,7 @@ void korali::problem::bayesian::Reference::loglikelihoodNegativeBinomial(korali:
   sample["logLikelihood"] = loglike;
 }
 
-void korali::problem::bayesian::Reference::evaluateLoglikelihoodGradient(korali::Sample &sample)
+void Reference::evaluateLoglikelihoodGradient(Sample &sample)
 {
   double eval = sample["F(x)"];
   if (isfinite(eval))
@@ -188,7 +158,7 @@ void korali::problem::bayesian::Reference::evaluateLoglikelihoodGradient(korali:
     else if (_likelihoodModel == "Negative Binomial")
       gradientLoglikelihoodNegativeBinomial(sample);
     else
-      korali::Logger::logError("Gradient not yet implemented for selected bayesian problem and log likelihood model.");
+      KORALI_LOG_ERROR("Gradient not yet implemented for selected bayesian problem and log likelihood model.");
   }
   else
   {
@@ -196,63 +166,33 @@ void korali::problem::bayesian::Reference::evaluateLoglikelihoodGradient(korali:
   }
 }
 
-void korali::problem::bayesian::Reference::gradientLoglikelihoodNormal(korali::Sample &sample)
+void Reference::gradientLoglikelihoodNormal(Sample &sample)
 {
-  std::vector<double> refEvaluations;
-  std::vector<double> standardDev;
-  std::vector<std::vector<double>> gradientF;
-  std::vector<std::vector<double>> gradientG;
+  auto refEvals = KORALI_GET(std::vector<double>, sample, "Reference Evaluations");
+  auto stdDevs = KORALI_GET(std::vector<double>, sample, "Standard Deviation");
+  auto gradientF = KORALI_GET(std::vector<std::vector<double>>, sample, "Gradient Mean");
+  auto gradientG = KORALI_GET(std::vector<std::vector<double>>, sample, "Gradient Standard Deviation");
 
-  try
-  {
-    refEvaluations = sample["Reference Evaluations"].get<std::vector<double>>();
-  }
-  catch (const std::exception &e)
-  {
-    korali::Logger::logError("Missing or incorrect value of 'Reference Evaluations' returned by the sample evaluation. \n   + Solution: Make sure your model is storing its reference evaluations, e.g., sample[\"Reference Evaluations\"] = value(s).\n   + Cause: %s\n", e.what());
-  }
+  if (stdDevs.size() != _referenceData.size())
+    KORALI_LOG_ERROR("This Bayesian (%s) problem requires a %lu-sized Standard Deviation array. Provided: %lu.\n", _likelihoodModel.c_str(), _referenceData.size(), stdDevs.size());
 
-  try
-  {
-    standardDev = sample["Standard Deviation"].get<std::vector<double>>();
-  }
-  catch (const std::exception &e)
-  {
-    korali::Logger::logError("Missing or incorrect value of 'Standard Deviation' returned by the sample evaluation. \n   + Solution: Make sure your model is storing its Standard Deviation, e.g., sample[\"Standard Deviation\"] = value(s).\n   + Cause: %s\n", e.what());
-  }
+  if (refEvals.size() != _referenceData.size())
+    KORALI_LOG_ERROR("This Bayesian (%s) problem requires a %lu-sized Reference Evaluations array. Provided: %lu.\n", _likelihoodModel.c_str(), _referenceData.size(), refEvals.size());
 
-  try
-  {
-    gradientF = sample["Gradient Mean"].get<std::vector<std::vector<double>>>();
-  }
-  catch (const std::exception &e)
-  {
-    korali::Logger::logError("Missing or incorrect value of 'Gradient Mean' returned by the sample evaluation. \n   + Solution: Make sure your model is storing its Gradient Mean, e.g., sample[\"Gradient Mean\"] = value(s).\n   + Cause: %s\n", e.what());
-  }
-
-  try
-  {
-    gradientG = sample["Gradient Standard Deviation"].get<std::vector<std::vector<double>>>();
-  }
-  catch (const std::exception &e)
-  {
-    korali::Logger::logError("Missing or incorrect value of 'Gradient Standard Deviation' returned by the sample evaluation. \n   + Solution: Make sure your model is storing its Gradient Standard Deviation, e.g., sample[\"Gradient Standard Deviation\"] = value(s).\n   + Cause: %s\n", e.what());
-  }
-
-  if (sample["Gradient Mean"].size() != refEvaluations.size()) korali::Logger::logError("Bayesian problem requires a gradient of the Mean for each reference evaluation (provided %zu required %zu).", gradientF.size(), refEvaluations.size());
-  if (gradientG.size() != refEvaluations.size()) korali::Logger::logError("Bayesian problem requires a gradient of the Standard Deviation for each reference evaluation (provided %zu required %zu).", gradientF.size(), refEvaluations.size());
+  if (gradientF.size() != _referenceData.size()) KORALI_LOG_ERROR("Bayesian problem requires a gradient of the Mean for each reference evaluation (provided %zu required %zu).", gradientF.size(), _referenceData.size());
+  if (gradientG.size() != _referenceData.size()) KORALI_LOG_ERROR("Bayesian problem requires a gradient of the Standard Deviation for each reference evaluation (provided %zu required %zu).", gradientF.size(), _referenceData.size());
 
   std::vector<double> llkgradient(_k->_variables.size(), 0.0);
   for (size_t i = 0; i < _referenceData.size(); ++i)
   {
-    if (gradientF[i].size() != _k->_variables.size()) korali::Logger::logError("Bayesian Reference Mean gradient calculation requires gradients of size %zu (provided size %zu)\n", _k->_variables.size(), gradientF[i].size());
-    if (gradientG[i].size() != _k->_variables.size()) korali::Logger::logError("Bayesian Reference Standard Deviation gradient calculation requires gradients of size %zu (provided size %zu)\n", _k->_variables.size(), gradientG[i].size());
+    if (gradientF[i].size() != _k->_variables.size()) KORALI_LOG_ERROR("Bayesian Reference Mean gradient calculation requires gradients of size %zu (provided size %zu)\n", _k->_variables.size(), gradientF[i].size());
+    if (gradientG[i].size() != _k->_variables.size()) KORALI_LOG_ERROR("Bayesian Reference Standard Deviation gradient calculation requires gradients of size %zu (provided size %zu)\n", _k->_variables.size(), gradientG[i].size());
 
-    double invStdDev = 1.0 / standardDev[i];
+    double invStdDev = 1.0 / stdDevs[i];
     double invStdDev2 = invStdDev * invStdDev;
     double invStdDev3 = invStdDev2 * invStdDev;
 
-    double dif = _referenceData[i] - refEvaluations[i];
+    double dif = _referenceData[i] - refEvals[i];
 
     for (size_t d = 0; d < _k->_variables.size(); ++d)
     {
@@ -266,60 +206,30 @@ void korali::problem::bayesian::Reference::gradientLoglikelihoodNormal(korali::S
   sample["logLikelihood Gradient"] = llkgradient;
 }
 
-void korali::problem::bayesian::Reference::gradientLoglikelihoodPositiveNormal(korali::Sample &sample)
+void Reference::gradientLoglikelihoodPositiveNormal(Sample &sample)
 {
-  std::vector<double> refEvaluations;
-  std::vector<double> standardDev;
-  std::vector<std::vector<double>> gradientF;
-  std::vector<std::vector<double>> gradientG;
+  auto refEvals = KORALI_GET(std::vector<double>, sample, "Reference Evaluations");
+  auto stdDevs = KORALI_GET(std::vector<double>, sample, "Standard Deviation");
+  auto gradientF = KORALI_GET(std::vector<std::vector<double>>, sample, "Gradient Mean");
+  auto gradientG = KORALI_GET(std::vector<std::vector<double>>, sample, "Gradient Standard Deviation");
 
-  try
-  {
-    refEvaluations = sample["Reference Evaluations"].get<std::vector<double>>();
-  }
-  catch (const std::exception &e)
-  {
-    korali::Logger::logError("Missing or incorrect value of 'Reference Evaluations' returned by the sample evaluation. \n   + Solution: Make sure your model is storing its reference evaluations, e.g., sample[\"Reference Evaluations\"] = value(s).\n   + Cause: %s\n", e.what());
-  }
+  if (stdDevs.size() != _referenceData.size())
+    KORALI_LOG_ERROR("This Bayesian (%s) problem requires a %lu-sized Standard Deviation array. Provided: %lu.\n", _likelihoodModel.c_str(), _referenceData.size(), stdDevs.size());
 
-  try
-  {
-    standardDev = sample["Standard Deviation"].get<std::vector<double>>();
-  }
-  catch (const std::exception &e)
-  {
-    korali::Logger::logError("Missing or incorrect value of 'Standard Deviation' returned by the sample evaluation. \n   + Solution: Make sure your model is storing its Standard Deviation, e.g., sample[\"Standard Deviation\"] = value(s).\n   + Cause: %s\n", e.what());
-  }
+  if (refEvals.size() != _referenceData.size())
+    KORALI_LOG_ERROR("This Bayesian (%s) problem requires a %lu-sized Reference Evaluations array. Provided: %lu.\n", _likelihoodModel.c_str(), _referenceData.size(), refEvals.size());
 
-  try
-  {
-    gradientF = sample["Gradient Mean"].get<std::vector<std::vector<double>>>();
-  }
-  catch (const std::exception &e)
-  {
-    korali::Logger::logError("Missing or incorrect value of 'Gradient Mean' returned by the sample evaluation. \n   + Solution: Make sure your model is storing its Gradient Mean, e.g., sample[\"Gradient Mean\"] = value(s).\n   + Cause: %s\n", e.what());
-  }
-
-  try
-  {
-    gradientG = sample["Gradient Standard Deviation"].get<std::vector<std::vector<double>>>();
-  }
-  catch (const std::exception &e)
-  {
-    korali::Logger::logError("Missing or incorrect value of 'Gradient Standard Deviation' returned by the sample evaluation. \n   + Solution: Make sure your model is storing its Gradient Standard Deviation, e.g., sample[\"Gradient Standard Deviation\"] = value(s).\n   + Cause: %s\n", e.what());
-  }
-
-  if (sample["Gradient Mean"].size() != refEvaluations.size()) korali::Logger::logError("Bayesian problem requires a gradient of the Mean for each reference evaluation (provided %zu required %zu).", gradientF.size(), refEvaluations.size());
-  if (gradientG.size() != refEvaluations.size()) korali::Logger::logError("Bayesian problem requires a gradient of the Standard Deviation for each reference evaluation (provided %zu required %zu).", gradientF.size(), refEvaluations.size());
+  if (gradientF.size() != _referenceData.size()) KORALI_LOG_ERROR("Bayesian problem requires a gradient of the Mean for each reference evaluation (provided %zu required %zu).", gradientF.size(), _referenceData.size());
+  if (gradientG.size() != _referenceData.size()) KORALI_LOG_ERROR("Bayesian problem requires a gradient of the Standard Deviation for each reference evaluation (provided %zu required %zu).", gradientF.size(), _referenceData.size());
 
   std::vector<double> llkgradient(_k->_variables.size(), 0.0);
   for (size_t i = 0; i < _referenceData.size(); ++i)
   {
-    if (gradientF[i].size() != _k->_variables.size()) korali::Logger::logError("Bayesian Reference Mean gradient calculation requires gradients of size %zu (provided size %zu)\n", _k->_variables.size(), gradientF[i].size());
-    if (gradientG[i].size() != _k->_variables.size()) korali::Logger::logError("Bayesian Reference Standard Deviation gradient calculation requires gradients of size %zu (provided size %zu)\n", _k->_variables.size(), gradientG[i].size());
+    if (gradientF[i].size() != _k->_variables.size()) KORALI_LOG_ERROR("Bayesian Reference Mean gradient calculation requires gradients of size %zu (provided size %zu)\n", _k->_variables.size(), gradientF[i].size());
+    if (gradientG[i].size() != _k->_variables.size()) KORALI_LOG_ERROR("Bayesian Reference Standard Deviation gradient calculation requires gradients of size %zu (provided size %zu)\n", _k->_variables.size(), gradientG[i].size());
 
-    double mu = refEvaluations[i];
-    double sig = standardDev[i];
+    double mu = refEvals[i];
+    double sig = stdDevs[i];
 
     double invsig = 1.0 / sig;
     double invsig2 = invsig * invsig;
@@ -330,7 +240,7 @@ void korali::problem::bayesian::Reference::gradientLoglikelihoodPositiveNormal(k
 
     double phims = gsl_ran_gaussian_pdf(-mu / sig, 1.0);
 
-    double dif = _referenceData[i] - refEvaluations[i];
+    double dif = _referenceData[i] - refEvals[i];
 
     for (size_t d = 0; d < _k->_variables.size(); ++d)
     {
@@ -344,38 +254,29 @@ void korali::problem::bayesian::Reference::gradientLoglikelihoodPositiveNormal(k
   sample["logLikelihood Gradient"] = llkgradient;
 }
 
-void korali::problem::bayesian::Reference::gradientLoglikelihoodNegativeBinomial(korali::Sample &sample)
+void Reference::gradientLoglikelihoodNegativeBinomial(Sample &sample)
 {
   size_t N = _referenceData.size();
 
-  std::vector<double> refEvaluations;
-  std::vector<std::vector<double>> gradient;
+  auto refEvals = KORALI_GET(std::vector<double>, sample, "Reference Evaluations");
+  auto dispersion = KORALI_GET(std::vector<double>, sample, "Dispersion");
+  auto gradient = KORALI_GET(std::vector<std::vector<double>>, sample, "Gradient Mean");
 
-  try
-  {
-    refEvaluations = sample["Reference Evaluations"].get<std::vector<double>>();
-  }
-  catch (const std::exception &e)
-  {
-    korali::Logger::logError("Missing or incorrect value of 'Reference Evaluations' returned by the sample evaluation. \n   + Solution: Make sure your model is storing its reference evaluations, e.g., sample[\"Reference Evaluations\"] = value(s).\n   + Cause: %s\n", e.what());
-  }
+  if (refEvals.size() != _referenceData.size())
+    KORALI_LOG_ERROR("This Bayesian (%s) problem requires a %lu-sized Reference Evaluations array. Provided: %lu.\n", _likelihoodModel.c_str(), _referenceData.size(), refEvals.size());
 
-  try
-  {
-    gradient = sample["Gradient"].get<std::vector<std::vector<double>>>();
-  }
-  catch (const std::exception &e)
-  {
-    korali::Logger::logError("Missing or incorrect value of 'Gradient' returned by the sample evaluation. \n   + Solution: Make sure your model is storing its gradient values, e.g., sample[\"Gradient\"] = value(s).\n   + Cause: %s\n", e.what());
-  }
+  if (dispersion.size() != _referenceData.size())
+    KORALI_LOG_ERROR("This Bayesian (%s) problem requires a %lu-sized Dispersion array. Provided: %lu.\n", _likelihoodModel.c_str(), _referenceData.size(), dispersion.size());
+
+  if (gradient.size() != _referenceData.size()) KORALI_LOG_ERROR("Bayesian problem requires a gradient of the Mean for each reference evaluation (provided %zu required %zu).", gradient.size(), _referenceData.size());
 
   std::vector<double> llkgradient(N, 0.0);
 
   double r, m, d, tmpsum;
   for (size_t i = 0; i < N; i++)
   {
-    r = sample["Dispersion"][i];
-    m = refEvaluations[i];
+    r = dispersion[i];
+    m = refEvals[i];
     d = _referenceData[i];
 
     tmpsum = r + m;
@@ -391,9 +292,10 @@ void korali::problem::bayesian::Reference::gradientLoglikelihoodNegativeBinomial
   sample["logLikelihood Gradient"] = llkgradient;
 }
 
-void korali::problem::bayesian::Reference::evaluateFisherInformation(korali::Sample &sample)
+void Reference::evaluateFisherInformation(Sample &sample)
 {
-  double eval = sample["F(x)"];
+  auto eval = KORALI_GET(double, sample, "F(x)");
+
   if (isfinite(eval))
   {
     if (_likelihoodModel == "Normal")
@@ -403,7 +305,7 @@ void korali::problem::bayesian::Reference::evaluateFisherInformation(korali::Sam
     else if (_likelihoodModel == "Negative Binomial")
       fisherInformationLoglikelihoodNegativeBinomial(sample);
     else
-      korali::Logger::logError("Fisher Information not yet implemented for selected Bayesian problem and log likelihood model.");
+      KORALI_LOG_ERROR("Fisher Information not yet implemented for selected Bayesian problem and log likelihood model.");
   }
   else
   {
@@ -411,46 +313,25 @@ void korali::problem::bayesian::Reference::evaluateFisherInformation(korali::Sam
   }
 }
 
-void korali::problem::bayesian::Reference::fisherInformationLoglikelihoodNormal(korali::Sample &sample)
+void Reference::fisherInformationLoglikelihoodNormal(Sample &sample)
 {
   size_t Nd = _referenceData.size();
   size_t Nth = _k->_variables.size();
 
-  std::vector<double> standardDev;
-  std::vector<std::vector<double>> gradientF;
-  std::vector<std::vector<double>> gradientG;
+  auto stdDevs = KORALI_GET(std::vector<double>, sample, "Standard Deviation");
+  auto gradientF = KORALI_GET(std::vector<std::vector<double>>, sample, "Gradient Mean");
+  auto gradientG = KORALI_GET(std::vector<std::vector<double>>, sample, "Gradient Standard Deviation");
 
-  try
-  {
-    standardDev = sample["Standard Deviation"].get<std::vector<double>>();
-  }
-  catch (const std::exception &e)
-  {
-    korali::Logger::logError("Missing or incorrect value of 'Standard Deviation' returned by the sample evaluation. \n   + Solution: Make sure your model is storing its Standard Deviation, e.g., sample[\"Standard Deviation\"] = value(s).\n   + Cause: %s\n", e.what());
-  }
+  if (stdDevs.size() != _referenceData.size())
+    KORALI_LOG_ERROR("This Bayesian (%s) problem requires a %lu-sized Standard Deviation array. Provided: %lu.\n", _likelihoodModel.c_str(), _referenceData.size(), stdDevs.size());
 
-  try
-  {
-    gradientF = sample["Gradient Mean"].get<std::vector<std::vector<double>>>();
-  }
-  catch (const std::exception &e)
-  {
-    korali::Logger::logError("Missing or incorrect value of 'Gradient Mean' returned by the sample evaluation. \n   + Solution: Make sure your model is storing its Gradient Mean, e.g., sample[\"Gradient Mean\"] = value(s).\n   + Cause: %s\n", e.what());
-  }
-
-  try
-  {
-    gradientG = sample["Gradient Standard Deviation"].get<std::vector<std::vector<double>>>();
-  }
-  catch (const std::exception &e)
-  {
-    korali::Logger::logError("Missing or incorrect value of 'Gradient Standard Deviation' returned by the sample evaluation. \n   + Solution: Make sure your model is storing its Gradient Standard Deviation, e.g., sample[\"Gradient Standard Deviation\"] = value(s).\n   + Cause: %s\n", e.what());
-  }
+  if (gradientF.size() != _referenceData.size()) KORALI_LOG_ERROR("Bayesian problem requires a gradient of the Mean for each reference evaluation (provided %zu required %zu).", gradientF.size(), _referenceData.size());
+  if (gradientG.size() != _referenceData.size()) KORALI_LOG_ERROR("Bayesian problem requires a gradient of the Standard Deviation for each reference evaluation (provided %zu required %zu).", gradientF.size(), _referenceData.size());
 
   std::vector<double> FIM(Nth * Nth, 0.0);
   for (size_t i = 0; i < Nd; ++i)
   {
-    double var = standardDev[i] * standardDev[i];
+    double var = stdDevs[i] * stdDevs[i];
     double varinv = 1. / var;
 
     double tmp;
@@ -468,57 +349,30 @@ void korali::problem::bayesian::Reference::fisherInformationLoglikelihoodNormal(
   sample["Fisher Information"] = FIM;
 }
 
-void korali::problem::bayesian::Reference::fisherInformationLoglikelihoodPositiveNormal(korali::Sample &sample)
+void Reference::fisherInformationLoglikelihoodPositiveNormal(Sample &sample)
 {
   size_t Nd = _referenceData.size();
   size_t Nth = _k->_variables.size();
 
-  std::vector<double> refEvaluations;
-  std::vector<double> standardDev;
-  std::vector<std::vector<double>> gradientF;
-  std::vector<std::vector<double>> gradientG;
+  auto refEvals = KORALI_GET(std::vector<double>, sample, "Reference Evaluations");
+  auto stdDevs = KORALI_GET(std::vector<double>, sample, "Standard Deviation");
+  auto gradientF = KORALI_GET(std::vector<std::vector<double>>, sample, "Gradient Mean");
+  auto gradientG = KORALI_GET(std::vector<std::vector<double>>, sample, "Gradient Standard Deviation");
 
-  try
-  {
-    refEvaluations = sample["Reference Evaluations"].get<std::vector<double>>();
-  }
-  catch (const std::exception &e)
-  {
-    korali::Logger::logError("Missing or incorrect value of 'Reference Evaluations' returned by the sample evaluation. \n   + Solution: Make sure your model is storing its reference evaluations, e.g., sample[\"Reference Evaluations\"] = value(s).\n   + Cause: %s\n", e.what());
-  }
+  if (stdDevs.size() != _referenceData.size())
+    KORALI_LOG_ERROR("This Bayesian (%s) problem requires a %lu-sized Standard Deviation array. Provided: %lu.\n", _likelihoodModel.c_str(), _referenceData.size(), stdDevs.size());
 
-  try
-  {
-    standardDev = sample["Standard Deviation"].get<std::vector<double>>();
-  }
-  catch (const std::exception &e)
-  {
-    korali::Logger::logError("Missing or incorrect value of 'Standard Deviation' returned by the sample evaluation. \n   + Solution: Make sure your model is storing its Standard Deviation, e.g., sample[\"Standard Deviation\"] = value(s).\n   + Cause: %s\n", e.what());
-  }
+  if (refEvals.size() != _referenceData.size())
+    KORALI_LOG_ERROR("This Bayesian (%s) problem requires a %lu-sized Reference Evaluations array. Provided: %lu.\n", _likelihoodModel.c_str(), _referenceData.size(), refEvals.size());
 
-  try
-  {
-    gradientF = sample["Gradient Mean"].get<std::vector<std::vector<double>>>();
-  }
-  catch (const std::exception &e)
-  {
-    korali::Logger::logError("Missing or incorrect value of 'Gradient Mean' returned by the sample evaluation. \n   + Solution: Make sure your model is storing its Gradient Mean, e.g., sample[\"Gradient Mean\"] = value(s).\n   + Cause: %s\n", e.what());
-  }
-
-  try
-  {
-    gradientG = sample["Gradient Standard Deviation"].get<std::vector<std::vector<double>>>();
-  }
-  catch (const std::exception &e)
-  {
-    korali::Logger::logError("Missing or incorrect value of 'Gradient Standard Deviation' returned by the sample evaluation. \n   + Solution: Make sure your model is storing its Gradient Standard Deviation, e.g., sample[\"Gradient Standard Deviation\"] = value(s).\n   + Cause: %s\n", e.what());
-  }
+  if (gradientF.size() != _referenceData.size()) KORALI_LOG_ERROR("Bayesian problem requires a gradient of the Mean for each reference evaluation (provided %zu required %zu).", gradientF.size(), _referenceData.size());
+  if (gradientG.size() != _referenceData.size()) KORALI_LOG_ERROR("Bayesian problem requires a gradient of the Standard Deviation for each reference evaluation (provided %zu required %zu).", gradientF.size(), _referenceData.size());
 
   std::vector<double> FIM(Nth * Nth, 0.0);
   for (size_t i = 0; i < Nd; ++i)
   {
-    double mu = refEvaluations[i];
-    double sig = standardDev[i];
+    double mu = refEvals[i];
+    double sig = stdDevs[i];
     double var = sig * sig;
 
     double phims = gsl_ran_ugaussian_pdf(mu / sig);
@@ -552,7 +406,13 @@ void korali::problem::bayesian::Reference::fisherInformationLoglikelihoodPositiv
   sample["Fisher Information"] = FIM;
 }
 
-void korali::problem::bayesian::Reference::fisherInformationLoglikelihoodNegativeBinomial(korali::Sample &sample)
+void Reference::fisherInformationLoglikelihoodNegativeBinomial(Sample &sample)
 {
   // TODO
 }
+
+} // namespace bayesian
+
+} // namespace problem
+
+} // namespace korali

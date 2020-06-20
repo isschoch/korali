@@ -15,7 +15,7 @@ class Multivariate : public korali::Distribution
   * @param propertyName The name of the property to update
   * @param values double Numerical values to assign.
   */
-  virtual void setProperty(std::string propertyName, std::vector<double> values) = 0;
+  virtual void setProperty(const std::string &propertyName, const std::vector<double> &values) = 0;
 
   /**
  * @brief Gets the probability density of the distribution at points x.
@@ -23,7 +23,7 @@ class Multivariate : public korali::Distribution
  * @param result P(x) at the given points
  * @param n number of points
  */
-  virtual void getDensity(double *x, double *result, size_t n) = 0;
+  virtual void getDensity(double *x, double *result, const size_t n) = 0;
 
   /**
   * @brief Gets Log probability density of the distribution at points x.
@@ -31,14 +31,14 @@ class Multivariate : public korali::Distribution
   * @param result log(P(x)) at the given points
   * @param n number of points
   */
-  virtual void getLogDensity(double *x, double *result, size_t n) = 0;
+  virtual void getLogDensity(double *x, double *result, const size_t n) = 0;
 
   /**
   * @brief Draws and returns a random number vector from the distribution.
   * @param x Random real number vector.
   * @param n Vector size
   */
-  virtual void getRandomVector(double *x, size_t n) = 0;
+  virtual void getRandomVector(double *x, const size_t n) = 0;
 };
 
 } // namespace distribution

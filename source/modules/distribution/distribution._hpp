@@ -10,7 +10,7 @@
 
 namespace korali
 {
-class Distribution : public korali::Module
+class Distribution : public Module
 {
   public:
   /**
@@ -33,7 +33,7 @@ class Distribution : public korali::Module
  * @param rangeString The range to load, in string of hexadecimal values form
  * @return Pointer to the new range.
  */
-  gsl_rng *setRange(std::string rangeString);
+  gsl_rng *setRange(const std::string rangeString);
 
   /**
  * @brief Gets a hexadecimal string from a given range's state and seed
@@ -54,14 +54,14 @@ class Distribution : public korali::Module
   * @param property The name of the property to update
   * @param value double Numerical value to assign.
   */
-  virtual void updateProperty(std::string property, double value){};
+  virtual void updateProperty(std::string property, const double value){};
 
   /**
    * @brief Gets the pointer to a distribution property.
    * @param property The name of the property to update
    * @return Pointer to the property
    */
-  virtual double *getPropertyPointer(std::string property) { return NULL; };
+  virtual double *getPropertyPointer(const std::string &property) { return NULL; };
 };
 
 } // namespace korali

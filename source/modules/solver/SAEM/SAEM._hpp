@@ -11,15 +11,15 @@ namespace korali
 namespace solver
 {
 /*! @brief Class for the (general) Stochastic Approximation Expectation Maximization solver. */
-class SAEM : public korali::Solver
+class SAEM : public Solver
 {
   public:
   void setInitialConfiguration();
 
-  korali::Engine _engine;         //!< @brief Korali engine for running the optimization in the M step
-  korali::Experiment _experiment; //!< @brief Korali experiment for the optimization in the M step
+  Engine _engine;         //!< @brief Korali engine for running the optimization in the M step
+  Experiment _experiment; //!< @brief Korali experiment for the optimization in the M step
 
-  korali::problem::bayesian::Latent *_latentProblem; //!< @brief The problem instance that this SAEM is supposed to solve
+  problem::bayesian::Latent *_latentProblem; //!< @brief The problem instance that this SAEM is supposed to solve
 
   /**
   * @brief Run the user defined sampler to get new samples. Track mean and variance of the samples.
@@ -100,7 +100,7 @@ class SAEM : public korali::Solver
    @param zetaFc Function for calculating zeta of the likelihood model
    @param phiFc Function for calculating phi of the likelihood model
   */
-  static void QFunction(korali::Sample &sample, size_t zetaFc, size_t phiFc);
+  static void QFunction(Sample &sample, size_t zetaFc, size_t phiFc);
 
   void initialize() override;
   void finalize() override;

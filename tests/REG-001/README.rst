@@ -1,4 +1,4 @@
-Quick run of all basic tutorials for a quick sanity check
+Check C++ Code Formatting and Documentation
 ################################################################ 
 
-Quickly run all basic tutorials to check syntax and basic functioning of Korali's engine.
+This test makes sure all code has been formatted to satisfy Korali's standard and if the documentation can be built

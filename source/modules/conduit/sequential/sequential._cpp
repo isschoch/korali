@@ -4,33 +4,43 @@
 #include "modules/problem/problem.hpp"
 #include "modules/solver/solver.hpp"
 
-void korali::conduit::Sequential::initialize()
+using namespace std;
+
+namespace korali
+{
+namespace conduit
+{
+void Sequential::initialize()
 {
 }
 
-void korali::conduit::Sequential::processSample(korali::Sample &sample)
+void Sequential::processSample(Sample &sample)
 {
-  korali::Engine *engine = _engineStack.top();
+  Engine *engine = _engineStack.top();
 
   auto js = knlohmann::json();
-  js["Start Time"] = std::chrono::duration<double>(std::chrono::high_resolution_clock::now() - _startTime).count() + _cumulativeTime;
+  js["Start Time"] = chrono::duration<double>(chrono::high_resolution_clock::now() - _startTime).count() + _cumulativeTime;
 
   engine->_engineSample = &sample;
   initiateSample(sample._js.getJson());
 
-  js["End Time"] = std::chrono::duration<double>(std::chrono::high_resolution_clock::now() - _startTime).count() + _cumulativeTime;
+  js["End Time"] = chrono::duration<double>(chrono::high_resolution_clock::now() - _startTime).count() + _cumulativeTime;
   js["Current Generation"] = engine->_currentExperiment->_currentGeneration;
   js["Solver Id"] = engine->_currentExperiment->_experimentId;
   __profiler["Timelines"]["Worker 0"] += js;
 }
 
-void korali::conduit::Sequential::update(korali::Sample &sample)
+void Sequential::update(Sample &sample)
 {
-  korali::Engine *engine = _engineStack.top();
+  Engine *engine = _engineStack.top();
   engine->_engineSample->_js.getJson() = sample._js.getJson();
 }
 
-void korali::conduit::Sequential::broadcastGlobals(knlohmann::json &globalsJs)
+void Sequential::broadcastGlobals(knlohmann::json &globalsJs)
 {
   _conduit->_globals = globalsJs;
 }
+
+} // namespace conduit
+
+} // namespace korali

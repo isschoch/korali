@@ -7,6 +7,12 @@
 
 #include <string>
 
+/**
+ * @brief Terminates execution, printing an error message and indicates file name and line number where the error occurred.
+ */
+#define KORALI_LOG_ERROR(...) \
+  Logger::logError(__FILE__, __LINE__, __VA_ARGS__)
+
 namespace korali
 {
 /**
@@ -90,17 +96,12 @@ class Logger
 
   /**
   * @brief Outputs an error message to the console file. Overrides any verbosity level, prints, and exits execution with error.
+  * @param fileName where the error occurred, given by the __FILE__ macro
+  * @param lineNumber number where the error occurred, given by the __LINE__ macro
   * @param format Format string of the data (printf-style)
   * @param ... List of arguments for the format string
   */
-  static void logError(const char *format, ...);
-
-  /**
-  * @brief Throws a runtinme error with a given message. Overrides any verbosity level.
-  * @param format Format string of the data (printf-style)
-  * @param ... List of arguments for the format string
-  */
-  static void throwException(const char *format, ...);
+  static void logError [[noreturn]] (const char *fileName, const int lineNumber, const char *format, ...);
 };
 
 } // namespace korali

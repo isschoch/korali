@@ -10,49 +10,54 @@
 
 #define BUFFERSIZE 4096
 
-void korali::conduit::Concurrent::initialize()
+using namespace std;
+
+namespace korali
 {
-  if (_concurrentJobs < 1) korali::Logger::logError("You need to define at least 1 concurrent job(s) for external models \n");
+namespace conduit
+{
+void Concurrent::initialize()
+{
+  if (_concurrentJobs < 1) KORALI_LOG_ERROR("You need to define at least 1 concurrent job(s) for external models \n");
   _resultPipe.clear();
   _inputsPipe.clear();
   while (!_launcherQueue.empty()) _launcherQueue.pop();
 
-  for (int i = 0; i < _concurrentJobs; i++) _resultPipe.push_back(std::vector<int>(2));
-  for (int i = 0; i < _concurrentJobs; i++) _inputsPipe.push_back(std::vector<int>(2));
-  for (int i = 0; i < _concurrentJobs; i++) _launcherQueue.push(i);
+  for (size_t i = 0; i < _concurrentJobs; i++) _resultPipe.push_back(vector<int>(2));
+  for (size_t i = 0; i < _concurrentJobs; i++) _inputsPipe.push_back(vector<int>(2));
+  for (size_t i = 0; i < _concurrentJobs; i++) _launcherQueue.push(i);
 
   // Opening Inter-process communicator pipes
-  for (int i = 0; i < _concurrentJobs; i++)
+  for (size_t i = 0; i < _concurrentJobs; i++)
   {
-    if (pipe(_inputsPipe[i].data()) == -1) korali::Logger::logError("Unable to create inter-process pipe. \n");
-    if (pipe(_resultPipe[i].data()) == -1) korali::Logger::logError("Unable to create inter-process pipe. \n");
+    if (pipe(_inputsPipe[i].data()) == -1) KORALI_LOG_ERROR("Unable to create inter-process pipe. \n");
+    if (pipe(_resultPipe[i].data()) == -1) KORALI_LOG_ERROR("Unable to create inter-process pipe. \n");
     fcntl(_resultPipe[i][0], F_SETFL, fcntl(_resultPipe[i][0], F_GETFL) | O_NONBLOCK);
     fcntl(_resultPipe[i][1], F_SETFL, fcntl(_resultPipe[i][1], F_GETFL) | O_NONBLOCK);
   }
 }
 
-void korali::conduit::Concurrent::finalize()
+void Concurrent::finalize()
 {
   auto terminationJs = knlohmann::json();
   terminationJs["Conduit Action"] = "Terminate";
 
-  std::string terminationString = terminationJs.dump();
+  string terminationString = terminationJs.dump();
   size_t terminationStringSize = terminationString.size();
 
-  for (int i = 0; i < _concurrentJobs; i++)
+  for (size_t i = 0; i < _concurrentJobs; i++)
   {
     write(_inputsPipe[i][1], &terminationStringSize, sizeof(size_t));
     write(_inputsPipe[i][1], terminationString.c_str(), terminationStringSize * sizeof(char));
   }
 
-  for (int i = 0; i < _concurrentJobs; i++)
+  for (size_t i = 0; i < _concurrentJobs; i++)
   {
     int status;
-    pid_t processId;
-    processId = ::wait(&status);
+    ::wait(&status);
   }
 
-  for (int i = 0; i < _concurrentJobs; i++)
+  for (size_t i = 0; i < _concurrentJobs; i++)
   {
     close(_resultPipe[i][1]); // Closing pipes
     close(_resultPipe[i][0]); // Closing pipes
@@ -60,12 +65,12 @@ void korali::conduit::Concurrent::finalize()
     close(_inputsPipe[i][0]); // Closing pipes
   }
 
-  korali::Conduit::finalize();
+  Conduit::finalize();
 }
 
-void korali::conduit::Concurrent::initServer()
+void Concurrent::initServer()
 {
-  for (int i = 0; i < _concurrentJobs; i++)
+  for (size_t i = 0; i < _concurrentJobs; i++)
   {
     pid_t processId = fork();
     if (processId == 0) worker(i);
@@ -73,16 +78,16 @@ void korali::conduit::Concurrent::initServer()
   }
 }
 
-void korali::conduit::Concurrent::update(korali::Sample &sample)
+void Concurrent::update(Sample &sample)
 {
-  std::string resultString = sample._js.getJson().dump();
+  string resultString = sample._js.getJson().dump();
   size_t resultStringSize = resultString.size();
 
   write(_resultPipe[_workerId][1], &resultStringSize, sizeof(size_t));
   write(_resultPipe[_workerId][1], resultString.c_str(), resultStringSize * sizeof(char));
 }
 
-void korali::conduit::Concurrent::worker(int workerId)
+void Concurrent::worker(int workerId)
 {
   _workerId = workerId;
 
@@ -109,17 +114,17 @@ void korali::conduit::Concurrent::worker(int workerId)
     if (actionJs["Conduit Action"] == "Terminate") exit(0);
     if (actionJs["Conduit Action"] == "Process Sample") initiateSample(actionJs);
     if (actionJs["Conduit Action"] == "Broadcast Globals") _globals = actionJs;
-    if (actionJs["Conduit Action"] == "Stack Engine") _engineStack.push(korali::Engine::deserialize(actionJs["Engine"]));
+    if (actionJs["Conduit Action"] == "Stack Engine") _engineStack.push(Engine::deserialize(actionJs["Engine"]));
     if (actionJs["Conduit Action"] == "Pop Engine") _engineStack.pop();
   }
 }
 
-void korali::conduit::Concurrent::processSample(korali::Sample &sample)
+void Concurrent::processSample(Sample &sample)
 {
-  korali::Engine *engine = _engineStack.top();
+  Engine *engine = _engineStack.top();
 
   int launcherId = -1;
-  if (JsonInterface::isDefined(sample._js.getJson(), "['Worker']"))
+  if (isDefined(sample._js.getJson(), "Worker"))
   {
     launcherId = sample["Worker"];
   }
@@ -135,12 +140,12 @@ void korali::conduit::Concurrent::processSample(korali::Sample &sample)
   }
 
   auto js = knlohmann::json();
-  js["Start Time"] = std::chrono::duration<double>(std::chrono::high_resolution_clock::now() - _startTime).count() + _cumulativeTime;
+  js["Start Time"] = chrono::duration<double>(chrono::high_resolution_clock::now() - _startTime).count() + _cumulativeTime;
 
   auto sampleJs = sample._js.getJson();
   sampleJs["Conduit Action"] = "Process Sample";
 
-  std::string inputString = sampleJs.dump();
+  string inputString = sampleJs.dump();
   size_t inputStringSize = inputString.size();
 
   write(_inputsPipe[launcherId][1], &inputStringSize, sizeof(size_t));
@@ -150,11 +155,11 @@ void korali::conduit::Concurrent::processSample(korali::Sample &sample)
   while (readBytes < 0)
   {
     // Check for child defunction
-    for (int i = 0; i < _workerPids.size(); i++)
+    for (size_t i = 0; i < _workerPids.size(); i++)
     {
       int status;
       pid_t result = waitpid(_workerPids[i], &status, WNOHANG);
-      if (result != 0) korali::Logger::logError("Worker %i (Pid: %d) exited unexpectedly.\n", i, _workerPids[i]);
+      if (result != 0) KORALI_LOG_ERROR("Worker %i (Pid: %d) exited unexpectedly.\n", i, _workerPids[i]);
     }
 
     size_t resultStringSize;
@@ -178,22 +183,22 @@ void korali::conduit::Concurrent::processSample(korali::Sample &sample)
     }
   }
 
-  js["End Time"] = std::chrono::duration<double>(std::chrono::high_resolution_clock::now() - _startTime).count() + _cumulativeTime;
+  js["End Time"] = chrono::duration<double>(chrono::high_resolution_clock::now() - _startTime).count() + _cumulativeTime;
   js["Solver Id"] = engine->_currentExperiment->_experimentId;
   js["Current Generation"] = engine->_currentExperiment->_currentGeneration;
-  __profiler["Timelines"]["Worker " + std::to_string(launcherId)] += js;
+  __profiler["Timelines"]["Worker " + to_string(launcherId)] += js;
 }
 
-void korali::conduit::Concurrent::stackEngine(korali::Engine *engine)
+void Concurrent::stackEngine(Engine *engine)
 {
   knlohmann::json engineJs;
   engineJs["Conduit Action"] = "Stack Engine";
   engine->serialize(engineJs["Engine"]);
 
-  std::string engineString = engineJs.dump();
+  string engineString = engineJs.dump();
   size_t engineStringSize = engineString.size();
 
-  for (int i = 0; i < _concurrentJobs; i++)
+  for (size_t i = 0; i < _concurrentJobs; i++)
   {
     write(_inputsPipe[i][1], &engineStringSize, sizeof(size_t));
 
@@ -208,28 +213,28 @@ void korali::conduit::Concurrent::stackEngine(korali::Engine *engine)
   }
 }
 
-void korali::conduit::Concurrent::popEngine()
+void Concurrent::popEngine()
 {
   auto popJs = knlohmann::json();
   popJs["Conduit Action"] = "Pop Engine";
 
-  std::string popString = popJs.dump();
+  string popString = popJs.dump();
   size_t popStringSize = popString.size();
 
-  for (int i = 0; i < _concurrentJobs; i++)
+  for (size_t i = 0; i < _concurrentJobs; i++)
   {
     write(_inputsPipe[i][1], &popStringSize, sizeof(size_t));
     write(_inputsPipe[i][1], popString.c_str(), popStringSize * sizeof(char));
   }
 }
 
-void korali::conduit::Concurrent::broadcastGlobals(knlohmann::json &globalsJs)
+void Concurrent::broadcastGlobals(knlohmann::json &globalsJs)
 {
   globalsJs["Conduit Action"] = "Broadcast Globals";
-  std::string globalsString = globalsJs.dump();
+  string globalsString = globalsJs.dump();
   size_t globalsStringSize = globalsString.size();
 
-  for (int i = 0; i < _concurrentJobs; i++)
+  for (size_t i = 0; i < _concurrentJobs; i++)
   {
     write(_inputsPipe[i][1], &globalsStringSize, sizeof(size_t));
 
@@ -244,7 +249,11 @@ void korali::conduit::Concurrent::broadcastGlobals(knlohmann::json &globalsJs)
   }
 }
 
-size_t korali::conduit::Concurrent::maxConcurrency()
+size_t Concurrent::maxConcurrency()
 {
   return _concurrentJobs;
 }
+
+} // namespace conduit
+
+} // namespace korali

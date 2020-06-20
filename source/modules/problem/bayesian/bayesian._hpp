@@ -14,13 +14,6 @@ class Bayesian : public korali::Problem
   void initialize() override;
 
   /**
-  * @brief Checks whether the proposed sample fits within the range of the prior distribution.
-  * @param sample A Korali Sample
-  * @return True, if feasible; false, otherwise.
- */
-  bool isSampleFeasible(korali::Sample &sample);
-
-  /**
    * @brief Produces a generic evaluation from the Posterior distribution of the sample, for optimization with CMAES, DEA, storing it in and stores it in sample["F(x)"].
    * @param sample A Korali Sample
   */
@@ -54,13 +47,13 @@ class Bayesian : public korali::Problem
  * @brief Evaluates the gradient of the logLikelikood w.r.t. to the variables, and stores it in sample["Log Likelihood Gradient"]
  * @param sample A Korali Sample
  */
-  virtual void evaluateLoglikelihoodGradient(korali::Sample &sample) { korali::Logger::logError("Gradient not yet implemented for selected Bayesian problem and log likelihood model."); }
+  virtual void evaluateLoglikelihoodGradient(korali::Sample &sample) { KORALI_LOG_ERROR("Gradient not yet implemented for selected Bayesian problem and log likelihood model."); }
 
   /**
  * @brief Evaluates the empirical Fisher information.
  * @param sample A Korali Sample
  */
-  virtual void evaluateFisherInformation(korali::Sample &sample) { korali::Logger::logError("Fisher information not yet implemented for selected Bayesian problem and log likelihood model."); }
+  virtual void evaluateFisherInformation(korali::Sample &sample) { KORALI_LOG_ERROR("Fisher information not yet implemented for selected Bayesian problem and log likelihood model."); }
 };
 
 } // namespace problem

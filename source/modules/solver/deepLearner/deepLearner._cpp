@@ -2,16 +2,20 @@
 #include "modules/experiment/experiment.hpp"
 #include "modules/solver/deepLearner/deepLearner.hpp"
 
-void korali::solver::DeepLearner::initialize()
+namespace korali
+{
+namespace solver
+{
+void DeepLearner::initialize()
 {
   // Getting problem pointer
-  _problem = dynamic_cast<korali::problem::SupervisedLearning *>(_k->_problem);
+  _problem = dynamic_cast<problem::SupervisedLearning *>(_k->_problem);
 
-  if (_problem->_trainingBatchSize == 0) korali::Logger::logError("Training data has not been provided for variable 0.\n");
-  if (_problem->_validationBatchSize == 0) korali::Logger::logError("Validation data has not been provided for variable 0.\n");
+  if (_problem->_trainingBatchSize == 0) KORALI_LOG_ERROR("Training data has not been provided for variable 0.\n");
+  if (_problem->_validationBatchSize == 0) KORALI_LOG_ERROR("Validation data has not been provided for variable 0.\n");
 
   // Setting training NN
-  _trainingNeuralNetwork = dynamic_cast<korali::NeuralNetwork *>(korali::Module::duplicate(_neuralNetwork));
+  _trainingNeuralNetwork = dynamic_cast<NeuralNetwork *>(Module::duplicate(_neuralNetwork));
 
   // Setting input training data
   _trainingNeuralNetwork->_layers[0]->_nodeValues.resize(_problem->_trainingBatchSize);
@@ -42,7 +46,7 @@ void korali::solver::DeepLearner::initialize()
   _trainingNeuralNetwork->create();
 
   // Creating Validation NN
-  _validationNeuralNetwork = dynamic_cast<korali::NeuralNetwork *>(korali::Module::duplicate(_trainingNeuralNetwork));
+  _validationNeuralNetwork = dynamic_cast<NeuralNetwork *>(Module::duplicate(_trainingNeuralNetwork));
   _validationNeuralNetwork->_operation = "Inference";
 
   // Setting input validation data
@@ -72,11 +76,11 @@ void korali::solver::DeepLearner::initialize()
   _validationNeuralNetwork->create();
 
   // Creating Test NN
-  _testNeuralNetwork = dynamic_cast<korali::NeuralNetwork *>(korali::Module::duplicate(_neuralNetwork));
+  _testNeuralNetwork = dynamic_cast<NeuralNetwork *>(Module::duplicate(_neuralNetwork));
   _validationNeuralNetwork->_operation = "Inference";
 }
 
-void korali::solver::DeepLearner::runGeneration()
+void DeepLearner::runGeneration()
 {
   /**************************************************************
   * Training Stage
@@ -89,12 +93,12 @@ void korali::solver::DeepLearner::runGeneration()
   *************************************************************/
 
   // Setting input validation data
-  korali::Sample validationSample;
+  Sample validationSample;
   validationSample["Parameters"] = _trainingNeuralNetwork->_validationParameters;
-  korali::NeuralNetwork::runSample(validationSample, _validationNeuralNetwork);
+  NeuralNetwork::runSample(validationSample, _validationNeuralNetwork);
 
   // Getting results of optimization
-  _currentValidationLoss = -validationSample["F(x)"].get<double>();
+  _currentValidationLoss = -KORALI_GET(double, validationSample, "F(x)");
 
   // If validation is better, saving it as the best network for use as for test batch later.
   _currentInactiveSteps++;
@@ -115,7 +119,7 @@ void korali::solver::DeepLearner::runGeneration()
   }
 }
 
-std::vector<std::vector<double>> korali::solver::DeepLearner::test(const std::vector<std::vector<double>> &inputBatch)
+std::vector<std::vector<double>> DeepLearner::evaluate(const std::vector<std::vector<double>> &inputBatch)
 {
   // Re-creating NN's internal structures
   _testNeuralNetwork->_layers[0]->_nodeValues = inputBatch;
@@ -138,7 +142,7 @@ std::vector<std::vector<double>> korali::solver::DeepLearner::test(const std::ve
     for (size_t i = 0; i < batchSize; i++)
       for (size_t j = 0; j < outputSize; j++)
       {
-        double value = _testNeuralNetwork->_layers[outputLayerId]->_nodeValues[i][j];
+        //double value = _testNeuralNetwork->_layers[outputLayerId]->_nodeValues[i][j];
         double sigma = _testNeuralNetwork->_outputNormalizationSigmas[j];
         double mean = _testNeuralNetwork->_outputNormalizationMeans[j];
         _testNeuralNetwork->_layers[outputLayerId]->_nodeValues[i][j] *= sigma;
@@ -149,7 +153,7 @@ std::vector<std::vector<double>> korali::solver::DeepLearner::test(const std::ve
   return _testNeuralNetwork->_layers[outputLayerId]->_nodeValues;
 }
 
-void korali::solver::DeepLearner::printGenerationAfter()
+void DeepLearner::printGenerationAfter()
 {
   // Printing results so far
   _k->_logger->logInfo("Normal", "Training Loss: %.15f\n", _trainingNeuralNetwork->_currentTrainingLoss);
@@ -157,3 +161,7 @@ void korali::solver::DeepLearner::printGenerationAfter()
   _k->_logger->logInfo("Normal", "Lowest Validation Loss: %.15f\n", _lowestValidationLoss);
   _k->_logger->logInfo("Normal", "Inactive Step Counter: %lu\n", _currentInactiveSteps);
 }
+
+} // namespace solver
+
+} // namespace korali

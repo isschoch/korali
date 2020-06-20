@@ -1,18 +1,20 @@
 #include "module.hpp"
 
-knlohmann::json korali::__profiler;
-std::chrono::time_point<std::chrono::high_resolution_clock> korali::_startTime;
-std::chrono::time_point<std::chrono::high_resolution_clock> korali::_endTime;
-double korali::_cumulativeTime;
-
 // Module Include List
 
-korali::Module *korali::Module::getModule(knlohmann::json &js, korali::Experiment *e)
+namespace korali
+{
+knlohmann::json __profiler;
+std::chrono::time_point<std::chrono::high_resolution_clock> _startTime;
+std::chrono::time_point<std::chrono::high_resolution_clock> _endTime;
+double _cumulativeTime;
+
+Module *Module::getModule(knlohmann::json &js, Experiment *e)
 {
   std::string moduleType = "Undefined";
 
-  if (!korali::JsonInterface::isDefined(js, "['Type']"))
-    korali::Logger::logError("No module type provided.\n");
+  if (!isDefined(js, "Type"))
+    KORALI_LOG_ERROR(" + No module type provided in:\n %s\n", js.dump(2).c_str());
 
   try
   {
@@ -20,31 +22,48 @@ korali::Module *korali::Module::getModule(knlohmann::json &js, korali::Experimen
   }
   catch (const std::exception &ex)
   {
-    korali::Logger::throwException("Could not parse module type: '%s'.\n%s", js["Type"].dump(2).c_str(), ex.what());
+    KORALI_LOG_ERROR(" + Could not parse module type: '%s'.\n%s", js["Type"].dump(2).c_str(), ex.what());
   }
 
   moduleType.erase(remove_if(moduleType.begin(), moduleType.end(), isspace), moduleType.end());
 
-  korali::JsonInterface::eraseValue(js, "['Type']");
+  bool isExperiment = false;
+  if (js["Type"] == "Experiment") isExperiment = true;
 
-  korali::Module *module = nullptr;
+  // Once we've read the module type, we delete this information, because it is not parsed by the module itself
+  eraseValue(js, "Type");
+
+  // Creating module pointer from it's type.
+  Module *module = nullptr;
 
   // Module Selection List
 
-  if (module == nullptr) korali::Logger::logError("Unrecognized module: %s.\n", moduleType.c_str());
+  if (module == nullptr) KORALI_LOG_ERROR(" + Unrecognized module: %s.\n", moduleType.c_str());
 
-  module->_k = e;
-  module->applyVariableDefaults();
-  module->applyModuleDefaults(js);
-  module->setConfiguration(js);
+  // If this is a new experiment, we should assign it its own configuration
+  if (isExperiment == true)
+    dynamic_cast<Experiment *>(module)->_js.getJson() = js;
+
+  // If this is a module inside an experiment, it needs to be properly configured
+  if (isExperiment == false)
+  {
+    module->_k = e;
+    module->applyVariableDefaults();
+    module->applyModuleDefaults(js);
+    module->setConfiguration(js);
+  }
+
+  // Initializing module
   module->initialize();
 
   return module;
 }
 
-korali::Module *korali::Module::duplicate(korali::Module *src)
+Module *Module::duplicate(Module *src)
 {
   knlohmann::json js;
   src->getConfiguration(js);
-  return korali::Module::getModule(js, src->_k);
+  return Module::getModule(js, src->_k);
 }
+
+} // namespace korali

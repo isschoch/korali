@@ -11,7 +11,7 @@ Installation Steps
   
   .. code-block:: bash
     
-     git clone https://github.com/cselab/korali.git --branch latest
+     git clone https://github.com/cselab/korali.git --recursive --branch latest
 
 2. Install Korali
 
@@ -78,7 +78,7 @@ Mandatory Requirements
 ---------------------------
 
   - **C++ Compiler**
-      Korali requires a C++ compiler that supports the C++14 standard (`-std=c++14`) to build.
+      Korali requires a C++ compiler that supports the C++14 standard (`-std=c++17`) to build.
       **Hint:** Check the following `link <https://en.cppreference.com/w/cpp/compiler_support#C.2B.2B14_core_language_features>`_ to verify whether your compiler supports C++14.
       Korali's installer will check the **$CXX** environment variable to determine the default C++ compiler. You can change the value of this variable to define a custom C++ compiler.
   

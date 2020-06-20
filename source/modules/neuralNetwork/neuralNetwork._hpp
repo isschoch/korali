@@ -14,7 +14,7 @@
 
 namespace korali
 {
-class NeuralNetwork : public korali::Module
+class NeuralNetwork : public Module
 {
   public:
   /**
@@ -58,7 +58,7 @@ class NeuralNetwork : public korali::Module
    * @brief Performs the training phase of the NN, given a solution and the NN's configuration.
    * @param stepsToRun The number of generations of the optimizer to run.
    */
-  void train(size_t stepsToRun = 1);
+  void train(const size_t stepsToRun = 1);
 
   /**
    * @brief Initializes the internal memory structures, with regards to the layer configuration of the network

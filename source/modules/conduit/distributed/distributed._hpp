@@ -1,6 +1,13 @@
 #ifndef _KORALI_CONDUIT_MPI_HPP_
 #define _KORALI_CONDUIT_MPI_HPP_
 
+#include "modules/conduit/conduit.hpp"
+#include <map>
+#include <queue>
+#include <vector>
+
+namespace korali
+{
 #ifdef _KORALI_USE_MPI
   #include "mpi.h"
 /**
@@ -21,16 +28,9 @@ extern MPI_Comm getKoraliMPIComm();
 extern long int getKoraliMPICommPointer();
 #endif
 
-#include "modules/conduit/conduit.hpp"
-#include <map>
-#include <queue>
-#include <vector>
-
-namespace korali
-{
 namespace conduit
 {
-class Distributed : public korali::Conduit
+class Distributed : public Conduit
 {
   private:
   /**
@@ -49,37 +49,42 @@ class Distributed : public korali::Conduit
   /**
   * @brief ID of the current rank.
   */
-  int _rankId;
+  size_t _rankId;
 
   /**
    * @brief Total number of ranks in execution
    */
-  int _rankCount;
+  size_t _rankCount;
 
   /**
   * @brief Number of Korali Teams in execution
   */
-  int _teamCount;
+  size_t _teamCount;
 
   /**
    * @brief ID the Korali Team for the current rank
    */
-  int _teamId;
+  size_t _teamId;
+
+  /**
+  * @brief Signals whether the worker has been assigned a team
+  */
+  size_t _teamIdSet;
 
   /**
  * @brief Local ID the rank within its Korali Team
  */
-  int _localRankId;
+  size_t _localRankId;
 
   /**
   * @brief Queue to store idle teams to be used
   */
-  std::queue<int> _teamQueue;
+  std::queue<size_t> _teamQueue;
 
   /**
   * @brief Map between Team ID and its workers
   */
-  std::map<int, std::vector<int>> _teamWorkers;
+  std::map<int, std::vector<size_t>> _teamWorkers;
 
   /**
   * @brief Flag to mark termination for Korali teams.
@@ -87,21 +92,21 @@ class Distributed : public korali::Conduit
   bool _continueEvaluations;
 #endif
 
-  void update(korali::Sample &sample) override;
+  void update(Sample &sample) override;
   void initServer() override;
   size_t maxConcurrency() override;
   void initialize() override;
   void finalize() override;
   void broadcastGlobals(knlohmann::json &sampleJs) override;
-  void processSample(korali::Sample &sample) override;
-  void stackEngine(korali::Engine *) override;
+  void processSample(Sample &sample) override;
+  void stackEngine(Engine *) override;
   void popEngine() override;
 
   /**
   * @brief Determines which rank is the root.
   * @return The rank id of the root rank.
   */
-  int getRootRank();
+  size_t getRootRank();
   bool isRoot() override;
   void abort() override;
 };

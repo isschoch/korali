@@ -20,7 +20,7 @@ Examples
 Plotting TMCMC
 -----------------
 
-Here we explain technical details of the :ref:`TMCMC <module-solver-tmcmc>` result plot.
+Here we explain technical details of the :ref:`TMCMC <module-solver-sampler-tmcmc>` result plot.
 
 The :code:`python3 -m korali.plotter` command plots the distribution of the samples at every generation. The samples are read from the json-files stored in the output directory (:code:`/_korali_result/`).
 
@@ -35,7 +35,7 @@ A plot of the samples obtained after the final generation of TMCMC function is g
 Plotting CMAES
 --------------------------------------------
 
-Here we explain :ref:`CMAES <module-solver-cmaes>` result plot in further detail and how it can be
+Here we explain :ref:`CMAES <module-solver-optimizer-cmaes>` result plot in further detail and how it can be
 used to validate your optimization.
 
 The module korali.plotter (run with :code:`python3 -m korali.plotter`) command visualizes some of the most meaningful states of CMA-ES stored in the result files in the output directory (:code:`_korali_result`). To plot a running simulation use the command :code:`python3 -m korali.plotter --live` for incremental plots.

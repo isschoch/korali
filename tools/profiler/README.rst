@@ -24,7 +24,6 @@ Profiling Multiple Experiments
 
 In this example, we plot the execution timeline of a 512 workers (each executing Mirheo on a GPU) solving five different experiments simultaneously.
 
-- Example Source: :ref:`Red Blood Cell Relaxation Experiment <RBCRelax>`
 - Profiling File: `example_multiple_512Nodes.json <https://github.com/cselab/korali/blob/master/tools/profiler/examples/example_multiple_512Nodes.json>`_
 
 The image below shows in the y-axis the worker id, and in the x-axis the elapsed time. Colored lines show when a worker is active executing a model, with different colors corresponding to a different experiment.
@@ -37,7 +36,6 @@ Profiling a Single Large-Experiment
 
 In this example, we plot the execution timeline of a 4096 workers (each executing Mirheo on a GPU) solving a single experiment.
 
-- Example Source: :ref:`Red Blood Cell Stretching Experiment <RBCStretch>`
 - Profiling File: `example_single_4096Nodes.json <https://github.com/cselab/korali/blob/master/tools/profiler/examples/example_single_4096Nodes.json>`_
 
 In this case, since workers can only draw from a single experiment, they tend to spend more time idle. This is caused by load imbalance, when some samples require more time to finish, forcing others to wait until the next generation. 

@@ -1,0 +1,462 @@
+#include "modules/conduit/conduit.hpp"
+#include "modules/solver/optimizer/LMCMAES/LMCMAES.hpp"
+#include "sample/sample.hpp"
+
+#include <algorithm> // std::sort
+#include <chrono>
+#include <numeric> // std::iota
+#include <stdio.h>
+#include <unistd.h>
+
+namespace korali
+{
+namespace solver
+{
+namespace optimizer
+{
+void LMCMAES::setInitialConfiguration()
+{
+  if (_targetDistanceCoefficients.size() == 0) _targetDistanceCoefficients = {double(_k->_variables.size()), 0.0, 0.0};
+
+  if (_targetDistanceCoefficients.size() != 3)
+    KORALI_LOG_ERROR("LMCMAES requires 3 parameters for 'Target Distance Coefficients' (%zu provided).\n", _targetDistanceCoefficients.size());
+
+  if (_muValue == 0) _muValue = _populationSize / 2;
+  if (_cumulativeCovariance == 0.0) _cumulativeCovariance = 0.5 / std::sqrt((double)_k->_variables.size());
+  if (_choleskyMatrixLearningRate == 0.0) _choleskyMatrixLearningRate = 1.0 / (10.0 - std::log((double)_k->_variables.size() + 1.0));
+  if (_targetDistanceCoefficients.empty()) _targetDistanceCoefficients = {(double)_k->_variables.size(), 0.0, 0.0};
+  if (_setUpdateInterval == 0) _setUpdateInterval = std::max(std::floor(std::log(_k->_variables.size())), 1.0);
+  if (_subsetSize == 0) _subsetSize = std::ceil(std::sqrt(double(_k->_variables.size())));
+
+  _chiSquareNumber = sqrt((double)_k->_variables.size()) * (1. - 1. / (4. * _k->_variables.size()) + 1. / (21. * _k->_variables.size() * _k->_variables.size()));
+  _sigmaExponentFactor = 0.0;
+  _conjugateEvolutionPathL2Norm = 0.0;
+
+  // Allocating Memory
+  _samplePopulation.resize(_populationSize);
+  for (size_t i = 0; i < _populationSize; i++) _samplePopulation[i].resize(_k->_variables.size());
+
+  _evolutionPath.resize(_k->_variables.size());
+  _meanUpdate.resize(_k->_variables.size());
+  _currentMean.resize(_k->_variables.size());
+  _previousMean.resize(_k->_variables.size());
+  _bestEverVariables.resize(_k->_variables.size());
+  _currentBestVariables.resize(_k->_variables.size());
+  _randomVector.resize(_k->_variables.size());
+  _choleskyFactorVectorProduct.resize(_k->_variables.size());
+  _standardDeviation.resize(_k->_variables.size());
+
+  _muWeights.resize(_muValue);
+
+  _sortingIndex.resize(_populationSize);
+  _previousSortingIndex.resize(_populationSize);
+  _valueVector.resize(_populationSize);
+  _previousValueVector.resize(_populationSize);
+
+  _evolutionPathWeights.resize(_subsetSize);
+  _subsetHistory.resize(_subsetSize);
+  _subsetUpdateTimes.resize(_subsetSize);
+
+  std::fill(_evolutionPathWeights.begin(), _evolutionPathWeights.end(), 0.0);
+  std::fill(_subsetHistory.begin(), _subsetHistory.end(), 0);
+  std::fill(_subsetUpdateTimes.begin(), _subsetUpdateTimes.end(), 0);
+
+  _inverseVectors.resize(_subsetSize);
+  _evolutionPathHistory.resize(_subsetSize);
+  for (size_t i = 0; i < _subsetSize; ++i)
+  {
+    _inverseVectors[i].resize(_k->_variables.size());
+    _evolutionPathHistory[i].resize(_k->_variables.size());
+    std::fill(_inverseVectors[i].begin(), _inverseVectors[i].end(), 0.0);
+    std::fill(_evolutionPathHistory[i].begin(), _evolutionPathHistory[i].end(), 0.0);
+  }
+
+  // Initializing variable defaults
+  for (size_t i = 0; i < _k->_variables.size(); i++)
+  {
+    /* confirm lower & upper bound */
+    //   if( (std::isfinite(_k->_variables[i]->_lowerBound) && std::isfinite(_k->_variables[i]->_upperBound) ) == false )
+    //        KORALI_LOG_ERROR("Lower and/or upper bound of variable \'%s\' is not defined.\n", _k->_variables[i]->_name.c_str());
+
+    /* init mean if not defined */
+    if (std::isfinite(_k->_variables[i]->_initialValue) == false)
+    {
+      if (std::isfinite(_k->_variables[i]->_lowerBound) == false) KORALI_LOG_ERROR("Initial (Mean) Value of variable \'%s\' not defined, and cannot be inferred because variable lower bound is not finite.\n", _k->_variables[i]->_name.c_str());
+      if (std::isfinite(_k->_variables[i]->_upperBound) == false) KORALI_LOG_ERROR("Initial (Mean) Value of variable \'%s\' not defined, and cannot be inferred because variable upper bound is not finite.\n", _k->_variables[i]->_name.c_str());
+      _k->_variables[i]->_initialValue = (_k->_variables[i]->_upperBound + _k->_variables[i]->_lowerBound) * 0.5;
+    }
+
+    /* calculate stddevs */
+    if (std::isfinite(_k->_variables[i]->_initialStandardDeviation) == false)
+      _standardDeviation[i] = 0.3 * (_k->_variables[i]->_upperBound - _k->_variables[i]->_lowerBound);
+    else
+      _standardDeviation[i] = _k->_variables[i]->_initialStandardDeviation;
+  }
+
+  _sigma = _initialSigma;
+
+  if ((_sigmaUpdateRule == "CMAES" || _sigmaUpdateRule == "LMCMA") == false)
+    KORALI_LOG_ERROR("Invalid setting of Sigma Update Rule (%s) (choose CMAES, or LMCMA).", _sigmaUpdateRule.c_str());
+
+  if (_muType == "Linear")
+    for (size_t i = 0; i < _muValue; i++) _muWeights[i] = _muValue - i;
+  else if (_muType == "Equal")
+    for (size_t i = 0; i < _muValue; i++) _muWeights[i] = 1.;
+  else if (_muType == "Logarithmic")
+    for (size_t i = 0; i < _muValue; i++) _muWeights[i] = log(std::max((double)_muValue, 0.5 * _populationSize) + 0.5) - log(i + 1.);
+  else
+    KORALI_LOG_ERROR("Invalid setting of Mu Type (%s) (Linear, Equal, and Logarithmic accepted).", _muType.c_str());
+
+  if ((_randomNumberDistribution != "Normal") && (_randomNumberDistribution != "Uniform")) KORALI_LOG_ERROR("Invalid setting of Random Number Distribution (%s) (Normal and Uniform accepted).", _randomNumberDistribution.c_str());
+
+  // Normalize weights vector and set mueff
+  double s1 = 0.0;
+  double s2 = 0.0;
+
+  for (size_t i = 0; i < _muValue; i++)
+  {
+    s1 += _muWeights[i];
+    s2 += _muWeights[i] * _muWeights[i];
+  }
+  _effectiveMu = s1 * s1 / s2;
+
+  for (size_t i = 0; i < _muValue; i++) _muWeights[i] /= s1;
+
+  if (_initialSigma <= 0.0)
+    KORALI_LOG_ERROR("Invalid Initial Sigma (must be greater 0.0, is %lf).", _initialSigma);
+  if (_cumulativeCovariance <= 0.0)
+    KORALI_LOG_ERROR("Invalid Initial Cumulative Covariance (must be greater 0.0).");
+  if (_sigmaCumulationFactor <= 0.0)
+    KORALI_LOG_ERROR("Invalid Sigma Cumulative Covariance (must be greater 0.0).");
+  if (_dampFactor <= 0.0)
+    KORALI_LOG_ERROR("Invalid Damp Factor (must be greater 0.0).");
+  if (_choleskyMatrixLearningRate <= 0.0 || _choleskyMatrixLearningRate > 1.0)
+    KORALI_LOG_ERROR("Invalid Cholesky Matrix Learning Rate (must be in (0, 1], is %lf).", _choleskyMatrixLearningRate);
+  if (_setUpdateInterval <= 0.0)
+    KORALI_LOG_ERROR("Invalid Set Update Interval(must be greater 0, is %zu).", _setUpdateInterval);
+
+  _infeasibleSampleCount = 0;
+  _bestEverValue = -std::numeric_limits<double>::infinity();
+  _sqrtInverseCholeskyRate = std::sqrt(1.0 - _choleskyMatrixLearningRate);
+
+  for (size_t i = 0; i < _k->_variables.size(); i++) _currentMean[i] = _previousMean[i] = _k->_variables[i]->_initialValue;
+}
+
+void LMCMAES::runGeneration()
+{
+  if (_k->_currentGeneration == 1) setInitialConfiguration();
+
+  prepareGeneration();
+
+  // Initializing Sample Evaluation
+  std::vector<Sample> samples(_populationSize);
+  for (size_t i = 0; i < _populationSize; i++)
+  {
+    samples[i]["Module"] = "Problem";
+    samples[i]["Operation"] = "Evaluate";
+    samples[i]["Parameters"] = _samplePopulation[i];
+    samples[i]["Sample Id"] = i;
+    _modelEvaluationCount++;
+    _conduit->start(samples[i]);
+  }
+
+  // Waiting for samples to finish
+  _conduit->waitAll(samples);
+  updateDistribution(samples);
+}
+
+void LMCMAES::prepareGeneration()
+{
+  for (size_t i = 0; i < _populationSize; ++i)
+  {
+    bool isFeasible;
+    do
+    {
+      isFeasible = isSampleFeasible(_samplePopulation[i]);
+
+      if (isFeasible == false) _infeasibleSampleCount++;
+
+    } while (isFeasible == false);
+  }
+}
+
+void LMCMAES::sampleSingle(size_t sampleIdx)
+{
+  if (_symmetricSampling || (sampleIdx % 2) == 0)
+  {
+    choleskyFactorUpdate(sampleIdx);
+    for (size_t d = 0; d < _k->_variables.size(); ++d)
+    {
+      _samplePopulation[sampleIdx][d] = _currentMean[d] + _sigma * _standardDeviation[d] * _choleskyFactorVectorProduct[d];
+    }
+  }
+  else
+  {
+    for (size_t d = 0; d < _k->_variables.size(); ++d)
+      //_samplePopulation[sampleIdx][d] = 2.0*_currentMean[d] - _samplePopulation[sampleIdx-1][d]; // version from [Loshchilov2015]
+      _samplePopulation[sampleIdx][d] = _currentMean[d] - _sigma * _standardDeviation[d] * _choleskyFactorVectorProduct[d]; // version from Loshcholov's code
+  }
+}
+
+void LMCMAES::updateDistribution(std::vector<Sample> &samples)
+{
+  // Processing results
+  for (size_t i = 0; i < _populationSize; i++)
+    _valueVector[i] = KORALI_GET(double, samples[i], "F(x)");
+
+  /* Copy to previous */
+  std::copy(_sortingIndex.begin(), _sortingIndex.end(), _previousSortingIndex.begin());
+  std::copy(_valueVector.begin(), _valueVector.end(), _previousValueVector.begin());
+
+  /* Generate _sortingIndex */
+  sort_index(_valueVector, _sortingIndex);
+
+  /* update function value history */
+  _previousBestValue = _currentBestValue;
+
+  /* update current best */
+  _currentBestValue = _valueVector[0];
+  for (size_t d = 0; d < _k->_variables.size(); ++d) _currentBestVariables[d] = _samplePopulation[_sortingIndex[0]][d];
+
+  /* update xbestever */
+  if (_currentBestValue > _bestEverValue)
+  {
+    _previousBestEverValue = _bestEverValue;
+    _bestEverValue = _currentBestValue;
+
+    for (size_t d = 0; d < _k->_variables.size(); ++d) _bestEverVariables[d] = _currentBestVariables[d];
+  }
+
+  /* set weights */
+  for (size_t d = 0; d < _k->_variables.size(); ++d)
+  {
+    _previousMean[d] = _currentMean[d];
+    _currentMean[d] = 0.;
+    for (size_t i = 0; i < _muValue; ++i)
+      _currentMean[d] += _muWeights[i] * _samplePopulation[_sortingIndex[i]][d];
+
+    _meanUpdate[d] = (_currentMean[d] - _previousMean[d]) / (_sigma * _standardDeviation[d]);
+  }
+
+  /* update evolution path */
+  _conjugateEvolutionPathL2Norm = 0.0;
+  for (size_t d = 0; d < _k->_variables.size(); ++d)
+  {
+    _evolutionPath[d] = (1. - _cumulativeCovariance) * _evolutionPath[d] + sqrt(_cumulativeCovariance * (2. - _cumulativeCovariance) * _effectiveMu) * _meanUpdate[d];
+    _conjugateEvolutionPathL2Norm += std::pow(_evolutionPath[d], 2);
+  }
+  _conjugateEvolutionPathL2Norm = std::sqrt(_conjugateEvolutionPathL2Norm);
+
+  /* update stored paths */
+  if ((_k->_currentGeneration - 1) % _setUpdateInterval == 0)
+  {
+    updateSet();
+    updateInverseVectors();
+  }
+
+  /* update sigma */
+  updateSigma();
+
+  /* numerical error management */
+  numericalErrorTreatment();
+}
+
+void LMCMAES::choleskyFactorUpdate(size_t sampleIdx)
+{
+  /* randomly select subsetStartIndex */
+  double ms = 4.0;
+  if (sampleIdx == 0) ms *= 10;
+  size_t subsetStartIndex = _subsetSize - std::min((size_t)std::floor(ms * std::abs(_normalGenerator->getRandomNumber())) + 1, _subsetSize);
+
+  //for (size_t d = 0; d < _k->_variables.size(); ++d) _randomVector[d] = (_uniformGenerator->getRandomNumber() > 0.5) ? 1 : -1.0; Rademacher
+  if (_randomNumberDistribution == "Normal")
+    for (size_t d = 0; d < _k->_variables.size(); ++d) _randomVector[d] = _normalGenerator->getRandomNumber();
+  else if (_randomNumberDistribution == "Uniform")
+    for (size_t d = 0; d < _k->_variables.size(); ++d) _randomVector[d] = 2 * _uniformGenerator->getRandomNumber() - 1.0;
+
+  for (size_t d = 0; d < _k->_variables.size(); ++d) _choleskyFactorVectorProduct[d] = _randomVector[d];
+
+  for (size_t i = subsetStartIndex; i < _subsetSize; ++i)
+  {
+    size_t idx = _subsetHistory[i];
+
+    double k = 0.0;
+    for (size_t d = 0; d < _k->_variables.size(); ++d) k += _inverseVectors[idx][d] * _randomVector[d];
+    k *= _evolutionPathWeights[idx];
+
+    for (size_t d = 0; d < _k->_variables.size(); ++d) _choleskyFactorVectorProduct[d] = _sqrtInverseCholeskyRate * _choleskyFactorVectorProduct[d] + k * _evolutionPathHistory[idx][d];
+  }
+}
+
+void LMCMAES::updateSet()
+{
+  size_t t = std::floor(double(_k->_currentGeneration - 1.0) / double(_setUpdateInterval));
+
+  if (t < _subsetSize)
+  {
+    _replacementIndex = t;
+    _subsetHistory[t] = t;
+    _subsetUpdateTimes[t] = t * _setUpdateInterval + 1;
+  }
+  else
+  {
+    double tmparg = 0.0, minarg, target;
+    minarg = std::numeric_limits<double>::max();
+    for (size_t i = 1; i < _subsetSize; ++i)
+    {
+      /* `target` by default equals  _k->_variables.size() */
+      target = _targetDistanceCoefficients[0] + _targetDistanceCoefficients[1] * std::pow(double(i + 1.) / double(_subsetSize), _targetDistanceCoefficients[2]);
+      tmparg = _subsetUpdateTimes[_subsetHistory[i]] - _subsetUpdateTimes[_subsetHistory[i - 1]] - target;
+      if (tmparg < minarg)
+      {
+        minarg = tmparg;
+        _replacementIndex = i;
+      }
+    }
+    if (tmparg > 0) _replacementIndex = 0; /* if all evolution paths at a distance of `target` or larger, update oldest */
+    size_t jtmp = _subsetHistory[_replacementIndex];
+    for (size_t i = _replacementIndex; i < _subsetSize - 1; ++i) _subsetHistory[i] = _subsetHistory[i + 1];
+
+    _subsetHistory[_subsetSize - 1] = jtmp;
+    _subsetUpdateTimes[jtmp] = t * _setUpdateInterval + 1;
+  }
+
+  /* insert new evolution path */
+  std::copy(_evolutionPath.begin(), _evolutionPath.end(), _evolutionPathHistory[_subsetHistory[_replacementIndex]].begin());
+}
+
+void LMCMAES::updateInverseVectors()
+{
+  double djt, k;
+  double fac = std::sqrt(1.0 + _choleskyMatrixLearningRate / (1.0 - _choleskyMatrixLearningRate));
+
+  /* update all inverse vectors and evolution path weights onwards from replacement index */
+  for (size_t i = _replacementIndex; i < _subsetSize; ++i)
+  {
+    size_t idx = _subsetHistory[i];
+
+    double v2L2 = 0.0;
+    for (size_t d = 0; d < _k->_variables.size(); ++d) v2L2 += _inverseVectors[idx][d] * _inverseVectors[idx][d];
+
+    k = 0.0;
+    if (v2L2 > 0.0)
+    {
+      djt = _sqrtInverseCholeskyRate / v2L2 * (1.0 - 1.0 / (fac * std::sqrt(v2L2)));
+
+      k = 0.0;
+      for (size_t d = 0; d < _k->_variables.size(); ++d) k += _inverseVectors[idx][d] * _evolutionPathHistory[idx][d];
+      k *= djt;
+
+      _evolutionPathWeights[idx] = _sqrtInverseCholeskyRate / v2L2 * (std::sqrt(1.0 + _choleskyMatrixLearningRate / (1.0 - _choleskyMatrixLearningRate) * v2L2) - 1.0);
+    }
+
+    for (size_t d = 0; d < _k->_variables.size(); ++d)
+      _inverseVectors[idx][d] = _sqrtInverseCholeskyRate * _evolutionPathHistory[idx][d] - k * _inverseVectors[idx][d];
+  }
+}
+
+void LMCMAES::updateSigma()
+{
+  /* update sigma */
+  if (_sigmaUpdateRule == "LMCMA")
+  {
+    double rank = 0;
+    for (size_t i = 0; i < _populationSize; ++i)
+    {
+      if (_valueVector[_sortingIndex[i]] > _previousValueVector[_previousSortingIndex[i]])
+      {
+        rank++;
+        for (size_t j = i + 1; (j < _populationSize) && (_valueVector[_sortingIndex[j]] > _previousValueVector[_previousSortingIndex[i]]); ++j) rank++;
+      }
+      else
+      {
+        rank--;
+        for (size_t j = i + 1; (j < _populationSize) && (_previousValueVector[_previousSortingIndex[j]] > _valueVector[_sortingIndex[i]]); ++j) rank--;
+      }
+    }
+
+    rank = rank / (_populationSize * _populationSize) - _targetSuccessRate;
+    _sigmaExponentFactor = (1.0 - _sigmaCumulationFactor) * _sigmaExponentFactor + _sigmaCumulationFactor * rank;
+
+    _sigma *= std::exp(_sigmaExponentFactor / _dampFactor);
+  }
+  else /* CMA-ES update rule */
+  {
+    _sigma *= exp(_sigmaCumulationFactor / _dampFactor * (_conjugateEvolutionPathL2Norm / _chiSquareNumber - 1.));
+  }
+
+  /* escape flat evaluation */
+  if (_currentBestValue == _valueVector[_sortingIndex[(int)_muValue]])
+  {
+    _sigma *= exp(0.2 + _sigmaCumulationFactor / _dampFactor);
+    _k->_logger->logWarning("Detailed", "Sigma increased due to equal function values.\n");
+  }
+
+  /* upper bound check for _sigma */
+  if (_sigma > 2.0 * _initialSigma)
+  {
+    _k->_logger->logInfo("Detailed", "Sigma exceeding initial sigma by a factor of two (%f > %f), increase value of Initial Sigma.\n", _sigma, 2.0 * _initialSigma);
+    if (_isSigmaBounded)
+    {
+      _sigma = 2.0 * _initialSigma;
+      _k->_logger->logInfo("Detailed", "Sigma set to upper bound (%f) due to solver configuration 'Is Sigma Bounded' = 'true'.\n", _sigma);
+    }
+  }
+}
+
+void LMCMAES::numericalErrorTreatment()
+{
+  //treat numerical precision provblems
+  //TODO
+}
+
+/************************************************************************/
+/*                    Additional Methods                                */
+/************************************************************************/
+
+void LMCMAES::sort_index(const std::vector<double> &vec, std::vector<size_t> &sortingIndex) const
+{
+  // initialize original _sortingIndex locations
+  std::iota(std::begin(sortingIndex), std::end(sortingIndex), (size_t)0);
+
+  // sort indexes based on comparing values in vec
+  std::sort(std::begin(sortingIndex), std::end(sortingIndex), [vec](size_t i1, size_t i2) { return vec[i1] > vec[i2]; });
+}
+
+void LMCMAES::printGenerationBefore() { return; }
+
+void LMCMAES::printGenerationAfter()
+{
+  _k->_logger->logInfo("Normal", "Sigma:                        %+6.3e\n", _sigma);
+  _k->_logger->logInfo("Normal", "Current Function Value: Max = %+6.3e - Best = %+6.3e\n", _currentBestValue, _bestEverValue);
+
+  _k->_logger->logInfo("Detailed", "Variable = (MeanX, BestX):\n");
+  for (size_t d = 0; d < _k->_variables.size(); d++) _k->_logger->logData("Detailed", "         %s = (%+6.3e, %+6.3e)\n", _k->_variables[d]->_name.c_str(), _currentMean[d], _bestEverVariables[d]);
+
+  _k->_logger->logInfo("Detailed", "Covariance Matrix:\n");
+  for (size_t d = 0; d < _k->_variables.size(); d++)
+  {
+    //for (size_t e = 0; e <= d; e++) _k->_logger->logData("Detailed", "   %+6.3e  ",_covarianceMatrix[d*_k->_variables.size()+e]);
+    _k->_logger->logInfo("Detailed", "\n");
+  }
+
+  _k->_logger->logInfo("Detailed", "Number of Infeasible Samples: %zu\n", _infeasibleSampleCount);
+}
+
+void LMCMAES::finalize()
+{
+  // Updating Results
+  (*_k)["Results"]["Best Sample"]["F(x)"] = _bestEverValue;
+  (*_k)["Results"]["Best Sample"]["Parameters"] = _bestEverVariables;
+
+  _k->_logger->logInfo("Minimal", "Optimum found: %e\n", _bestEverValue);
+  _k->_logger->logInfo("Minimal", "Optimum found at:\n");
+  for (size_t d = 0; d < _k->_variables.size(); ++d) _k->_logger->logData("Minimal", "         %s = %+6.3e\n", _k->_variables[d]->_name.c_str(), _bestEverVariables[d]);
+  _k->_logger->logInfo("Detailed", "Number of Infeasible Samples: %zu\n", _infeasibleSampleCount);
+}
+
+} // namespace optimizer
+
+} // namespace solver
+
+} // namespace korali

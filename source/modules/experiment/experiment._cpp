@@ -10,29 +10,40 @@
 #include <chrono>
 #include <cstdio>
 #include <map>
-
-/**
-  * @brief Pointer to the current experiment in execution
- */
-korali::Experiment *__expPointer;
+#include <stdlib.h>
 
 namespace korali
 {
 /**
+  * @brief Pointer to the current experiment in execution
+ */
+Experiment *__expPointer;
+
+/**
+  * @brief Pointer to the calling thread
+ */
+cothread_t __returnThread;
+
+/**
   * @brief Function for the initialization of new coroutine threads.
  */
 void threadWrapper() { __expPointer->run(); }
-} // namespace korali
 
-void korali::Experiment::run()
+void Experiment::run()
 {
-  co_switch(_engine->_thread);
+  co_switch(__returnThread);
 
   auto t0 = std::chrono::system_clock::now();
 
-  if (_currentGeneration == 0) saveState();
+  // Saving initial configuration
+  if (_currentGeneration == 0)
+    if (_fileOutputEnabled)
+    {
+      _timestamp = getTimestamp();
+      getConfiguration(_js.getJson());
+      saveState();
+    }
 
-  _solver->getConfiguration(_js["Solver"]);
   _currentGeneration++;
 
   while (_solver->checkTermination() == false)
@@ -56,6 +67,7 @@ void korali::Experiment::run()
     // Timing and Profiling End
     auto t1 = std::chrono::system_clock::now();
 
+    // Printing results to console
     if (_consoleOutputFrequency > 0)
       if (_currentGeneration % _consoleOutputFrequency == 0)
       {
@@ -63,141 +75,121 @@ void korali::Experiment::run()
         _logger->logInfo("Detailed", "Experiment: %lu - Generation Time: %.3fs\n", _experimentId, std::chrono::duration<double>(t1 - t0).count());
       }
 
-    if (_fileOutputFrequency > 0)
-      if (_currentGeneration % _fileOutputFrequency == 0) saveState();
+    // Saving state to a file
+    if (_fileOutputEnabled)
+      if (_fileOutputFrequency > 0)
+        if (_currentGeneration % _fileOutputFrequency == 0)
+        {
+          _timestamp = getTimestamp();
+          getConfiguration(_js.getJson());
+          saveState();
+        }
 
     _currentGeneration++;
+
+    // Check for error signals from python
+    if (isPythonActive && PyErr_CheckSignals() != 0) KORALI_LOG_ERROR("User requested break.\n");
   }
 
   auto t1 = std::chrono::system_clock::now();
 
-  // Saving last generation and final.json
+  // Finalizing experiment
   _currentGeneration--;
   _isFinished = true;
   _solver->finalize();
-  saveState();
+
+  // Saving last generation and final results
+  _timestamp = getTimestamp();
+  getConfiguration(_js.getJson());
+  if (_fileOutputEnabled) saveState();
 
   _logger->logInfo("Minimal", "--------------------------------------------------------------------\n");
   _logger->logInfo("Minimal", "%s finished correctly.\n", _solver->getType().c_str());
   for (size_t i = 0; i < _solver->_terminationCriteria.size(); i++) _logger->logInfo("Normal", "Termination Criterion Met: %s\n", _solver->_terminationCriteria[i].c_str());
-  _solver->finalize();
   _logger->logInfo("Normal", "Final Generation: %lu\n", _currentGeneration);
   _logger->logInfo("Normal", "Elapsed Time: %.3fs\n", std::chrono::duration<double>(t1 - t0).count());
 
   co_switch(_engine->_thread);
-  korali::Logger::logError("Trying to continue finished Experiment thread.\n");
+  KORALI_LOG_ERROR("Trying to continue finished Experiment thread.\n");
 }
 
-void korali::Experiment::saveState()
+void Experiment::saveState()
 {
+  if (_storeSampleInformation == true) _js["Samples"] = _sampleInfo["Samples"];
+
   char genFileName[256];
   sprintf(genFileName, "gen%08lu.json", _currentGeneration);
 
-  // Getting configuration
-  _timestamp = getTimestamp();
-  knlohmann::json results = _js.getJson()["Results"];
-  getConfiguration(_js.getJson());
   std::string fileName = "./" + _fileOutputPath + "/" + genFileName;
+  std::string linkName = "./" + _fileOutputPath + "/latest";
 
-  if (_storeSampleInformation == true) _js["Samples"] = _sampleInfo["Samples"];
-  auto js = _js.getJson();
-  js["Results"] = results;
+  if (saveJsonToFile(fileName.c_str(), _js.getJson()) != 0)
+    KORALI_LOG_ERROR("Error trying to save result file: %s.\n", fileName.c_str());
 
-  if (_fileOutputEnabled) korali::JsonInterface::saveJsonToFile(fileName.c_str(), js);
+  remove(linkName.c_str());
+
+  if (link(fileName.c_str(), linkName.c_str()) != 0)
+    KORALI_LOG_ERROR("Could not create hard link to latest result.\n + Target: %s\n + Link: %s\n", fileName.c_str(), linkName.c_str());
 }
 
-bool korali::Experiment::loadState()
+bool Experiment::loadState(const std::string &path)
 {
-  std::string path = "_korali_result";
-  if (korali::JsonInterface::isDefined(_js.getJson(), "['File Output']['Path']"))
-    std::string path = _js["File Output"]["Path"];
-  return loadState(path);
-}
-
-bool korali::Experiment::loadState(std::string path)
-{
-  auto js = knlohmann::json();
-
-  if (korali::dirExists(path))
+  if (loadJsonFromFile(_js.getJson(), path.c_str()))
   {
-    // Loading first generation file, if exists
-    for (const auto &entry : korali::listDirFiles(path))
-    {
-      std::string filePath = entry;
-      if (filePath.find("gen00000000.json", 0) != std::string::npos)
-        if (korali::JsonInterface::loadJsonFromFile(js, filePath.c_str()) == false) return false;
-    }
-
-    // Loading latest solver generation
-    for (const auto &entry : korali::listDirFiles(path))
-    {
-      std::string filePath = entry;
-      std::string fileExt = ".json";
-      if (filePath.find("gen", 0) != std::string::npos)
-        if (filePath.compare(filePath.size() - fileExt.size(), fileExt.size(), fileExt) == 0)
-        {
-          auto curJs = knlohmann::json();
-          if (korali::JsonInterface::loadJsonFromFile(curJs, filePath.c_str()))
-          {
-            size_t runId = js["Run ID"];
-            size_t currentGenRunId = curJs["Run ID"];
-            if (currentGenRunId == runId)
-            {
-              size_t curGen = curJs["Current Generation"];
-              if (curGen > js["Current Generation"])
-              {
-                js["Solver"] = curJs["Solver"];
-                js["Current Generation"] = curGen;
-                _k->_currentGeneration = curGen;
-              }
-            }
-          }
-        }
-    }
-
-    _k->_js.getJson() = js;
+    initialize();
     return true;
   }
-
   return false;
 }
 
-korali::Experiment::Experiment()
+Experiment::Experiment()
 {
-  _runID = korali::getTimehash();
-  _currentGeneration = 0;
+  _runID = getTimehash();
   _k = this;
 }
 
-void korali::Experiment::initialize()
+void Experiment::initialize()
 {
+  // Clearning sample and previous result information
+  _js["Results"] = knlohmann::json();
+  _js["Samples"] = knlohmann::json();
+
+  // Initializing Variables
+  _variables.resize(_js["Variables"].size());
+  for (size_t i = 0; i < _js["Variables"].size(); i++) _variables[i] = new Variable;
+
+  applyModuleDefaults(_js.getJson());
+
   try
   {
-    _js["Samples"] = knlohmann::json();
-    applyModuleDefaults(_js.getJson());
     setConfiguration(_js.getJson());
-    getConfiguration(_js.getJson());
-    __expPointer = this;
-    _thread = co_create(1 << 20, korali::threadWrapper);
-    co_switch(_thread);
   }
   catch (const std::exception &e)
   {
-    korali::Logger::throwException("[Korali] Error initializing experiment. Reason:\n%s", e.what());
+    KORALI_LOG_ERROR("Error parsing Experiment's configuration. Reason:\n%s", e.what());
   }
+
+  getConfiguration(_js.getJson());
+  __expPointer = this;
+  _thread = co_create(1 << 20, threadWrapper);
+  __returnThread = co_active();
+  co_switch(_thread);
 }
 
-void korali::Experiment::finalize()
+void Experiment::finalize()
 {
+  for (size_t i = 0; i < _variables.size(); i++) delete _variables[i];
   co_delete(_thread);
 }
 
-std::vector<std::vector<double>> korali::Experiment::test(const std::vector<std::vector<double>> &inputBatch)
+std::vector<std::vector<double>> Experiment::evaluate(const std::vector<std::vector<double>> &inputBatch)
 {
-  return _k->_solver->test(inputBatch);
+  return _k->_solver->evaluate(inputBatch);
 }
 
-knlohmann::json &korali::Experiment::operator[](const std::string &key) { return _js[key]; }
-knlohmann::json &korali::Experiment::operator[](const unsigned long int &key) { return _js[key]; }
-pybind11::object korali::Experiment::getItem(pybind11::object key) { return _js.getItem(key); }
-void korali::Experiment::setItem(pybind11::object key, pybind11::object val) { _js.setItem(key, val); }
+knlohmann::json &Experiment::operator[](const std::string &key) { return _js[key]; }
+knlohmann::json &Experiment::operator[](const unsigned long int &key) { return _js[key]; }
+pybind11::object Experiment::getItem(const pybind11::object key) { return _js.getItem(key); }
+void Experiment::setItem(const pybind11::object key, const pybind11::object val) { _js.setItem(key, val); }
+
+} // namespace korali

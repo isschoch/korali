@@ -1,27 +1,39 @@
 #include "modules/distribution/univariate/igamma/igamma.hpp"
 #include "modules/experiment/experiment.hpp"
 
-double korali::distribution::univariate::Igamma::getDensity(double x)
+namespace korali
+{
+namespace distribution
+{
+namespace univariate
+{
+double Igamma::getDensity(const double x) const
 {
   return _aux * std::pow(x, -_shape - 1.) * std::exp(-_scale / x);
 }
 
-double korali::distribution::univariate::Igamma::getLogDensity(double x)
+double Igamma::getLogDensity(const double x) const
 {
   if (x < 0) return -INFINITY;
   return _aux - (_shape + 1) * log(x) - (_scale / x);
 }
 
-double korali::distribution::univariate::Igamma::getRandomNumber()
+double Igamma::getRandomNumber()
 {
   return 1. / gsl_ran_gamma(_range, _shape, 1. / _scale);
 }
 
-void korali::distribution::univariate::Igamma::updateDistribution()
+void Igamma::updateDistribution()
 {
-  if (_shape <= 0.0) korali::Logger::logError("Incorrect Shape parameter of Inverse Gamma distribution: %f.\n", _shape);
-  if (_scale <= 0.0) korali::Logger::logError("Incorrect Scale parameter of Inverse Gamma distribution: %f.\n", _scale);
+  if (_shape <= 0.0) KORALI_LOG_ERROR("Incorrect Shape parameter of Inverse Gamma distribution: %f.\n", _shape);
+  if (_scale <= 0.0) KORALI_LOG_ERROR("Incorrect Scale parameter of Inverse Gamma distribution: %f.\n", _scale);
 
   _auxLog = _shape * log(_scale) - gsl_sf_lngamma(_shape);
   _aux = std::exp(_auxLog);
 }
+
+} // namespace univariate
+
+} // namespace distribution
+
+} // namespace korali

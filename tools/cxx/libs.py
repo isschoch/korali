@@ -9,4 +9,8 @@ def getlibs(extdir, makeFlags):
   flags += '-L' + makeFlags['GSLPREFIX'] + '/lib -Wl,-rpath,' + makeFlags[
       'GSLPREFIX'] + '/lib '
   flags += '-lpython3'
+  flags += ' ' + makeFlags['ONEDNNLIBS']
+  flags += ' ' + makeFlags['LIBGPLIBS']
+  flags += ' ' + makeFlags['RTNORMLIBS']
+  flags += ' ' + makeFlags['LIBCOLIBS']
   print(flags + ' ' + makeFlags['GSLLIBS'] + ' ' + makeFlags['PYBIND11LIBS'])

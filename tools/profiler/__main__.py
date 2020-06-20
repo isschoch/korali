@@ -47,7 +47,7 @@ parser.add_argument(
 args = parser.parse_args()
 
 if (args.test == True):
-  print('[Korali] Testing profiler plotter for file: ' + args.input + '...')
+  print('[Korali] Testing profiler plotter for file: ' + str(args.input) + '...')
   matplotlib.use('Agg')
 
 from matplotlib import pyplot

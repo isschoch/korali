@@ -1,0 +1,112 @@
+# -var Tset $T1 -var sigma $sigmalj -var epsilon $epsilonlj -var M $M -var DensSet $DensSet
+#-----------------------------------------------------------------
+#----------------------------UNITS--------------------------------
+#-----------------------------------------------------------------
+#mass=g/mole, d = A, t = fs, E = Kcal/mole, v = A/fs, f = Kcal/mole-A, M = Kcal/mole
+#T = K, p = atm, dynamic viscosity = Poise, e = e0, density = g/cm^3
+units real
+variable nAvog equal 6.0221415e23 # Avogadro's number
+variable A3_in_cm3 equal 1e-24 # Angstrom^3 in cm^3
+variable A_in_m equal 1e-10 # Angstrom in meter
+variable atm_in_Pa equal 101325 # note: 1 Pa = 1 N/m^2
+variable N_in_mN equal 1e3 # Newton in milliNewton
+variable convFac equal ${A_in_m}*${atm_in_Pa}*${N_in_mN}
+#-----------------------------------------------------------------
+#-------------------------LENGTH----------------------------------
+#-----------------------------------------------------------------
+variable Nequ0		equal 	0.5e4 		#0.5e4=0.01ns
+variable Nequ		equal 	0.5e5		#0.5e5=0.1ns
+
+variable Nf 		equal 	${Nequ}/500	#1e3=2ps   print averages 
+#-----------------------------------------------------------------
+#-------------------------DEF MODEL-------------------------------
+#-----------------------------------------------------------------
+atom_style full
+read_data initialEqu.txt
+
+#variable M		equal	1.0
+variable MoleMass	equal	${M}*18.0153
+#variable sigma		equal	3.4
+#variable epsilon  	equal	0.28
+variable rcut		equal	${sigma}*3.0
+variable skin		equal	${sigma}*0.7
+variable T_coup		equal	100.0	#fs
+variable P_coup0	equal   2000.0	#fs
+variable P_coup		equal	1000.0	#fs
+
+mass 1 ${MoleMass} # LJ
+pair_style lj/cut ${rcut}
+pair_coeff 1 1 ${epsilon} ${sigma}
+
+neighbor ${skin} bin
+neigh_modify every 1 delay 0 check yes
+#-----------------------------------------------------------------
+#-------------------------TD STATE--------------------------------
+#-----------------------------------------------------------------
+#variable Tset 		equal 	298.0
+variable Pset		equal	1.0
+#variable DensSet 	equal 	0.997
+#----------------------------------------------------------------
+#----------------MINIMIZATION------------------------------------
+#----------------------------------------------------------------
+minimize 0.0 1.0e-8 1000 100000
+
+velocity all create ${Tset} 1234 dist gaussian
+#-----------------------------------------------------------------
+#------------------------- EQU NVT -------------------------------
+#-----------------------------------------------------------------
+reset_timestep 0
+timestep 0.2				#0.2fs
+
+fix removeMomentum all momentum 1 linear 1 1 1
+fix NVT all nvt temp ${Tset} ${Tset} ${T_coup} 
+
+variable timeps equal time/1000
+
+thermo ${Nf}
+thermo_style custom v_timeps temp press pe
+
+run ${Nequ0}
+#-----------------------------------------------------------------
+#------------------------- EQU NVT -------------------------------
+#-----------------------------------------------------------------
+reset_timestep 0
+timestep 2.0				#2.0fs
+
+thermo ${Nf}
+thermo_style custom v_timeps temp press 
+
+dump trjNVT all custom ${Nequ} trjNVT.txt id type x y z vx vy vz
+
+run ${Nequ}
+undump trjNVT
+unfix NVT
+#-----------------------------------------------------------------
+#------------------------- EQU NPT -------------------------------
+#-----------------------------------------------------------------
+reset_timestep 0
+timestep 2.0				#2.0fs
+
+fix NPT all npt temp ${Tset} ${Tset} ${T_coup} iso ${Pset} ${Pset} ${P_coup0}
+
+thermo ${Nf}
+thermo_style custom v_timeps temp press vol density
+
+run ${Nequ}
+unfix NPT
+#-----------------------------------------------------------------
+#--------------------------EQU NPT--------------------------------
+#-----------------------------------------------------------------
+reset_timestep 0
+timestep 2.0				#2.0fs
+
+fix NPT all npt temp ${Tset} ${Tset} ${T_coup} iso ${Pset} ${Pset} ${P_coup}
+
+thermo ${Nf}
+thermo_style custom v_timeps temp press vol density
+
+dump trjNPT all custom ${Nequ} trjNPT.txt id type x y z vx vy vz
+
+run ${Nequ}
+
+

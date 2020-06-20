@@ -1,7 +1,11 @@
 #include "modules/distribution/univariate/univariate.hpp"
 #include "modules/experiment/experiment.hpp"
 
-void korali::distribution::Univariate::initialize()
+namespace korali
 {
-  korali::Distribution::initialize();
+void distribution::Univariate::initialize()
+{
+  Distribution::initialize();
 }
+
+} // namespace korali

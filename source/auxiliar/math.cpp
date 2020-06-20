@@ -5,16 +5,18 @@
 #include <cmath>
 #include <unistd.h>
 
-double korali::logSumExp(const std::vector<double> &logValues)
+namespace korali
+{
+double logSumExp(const std::vector<double> &logValues)
 {
   double maxLogValues = *std::max_element(std::begin(logValues), std::end(logValues));
 
   if (std::isinf(maxLogValues) == true)
   {
     if (maxLogValues < 0)
-      return -korali::Inf;
+      return -Inf;
     else
-      return korali::Inf;
+      return Inf;
   }
 
   double sumExpValues = 0.0;
@@ -23,7 +25,7 @@ double korali::logSumExp(const std::vector<double> &logValues)
   return maxLogValues + log(sumExpValues);
 }
 
-bool korali::isanynan(const std::vector<double> &x)
+bool isanynan(const std::vector<double> &x)
 {
   for (size_t j = 0; j < x.size(); j++)
     if (std::isnan(x[j]) == true) return true;
@@ -31,14 +33,14 @@ bool korali::isanynan(const std::vector<double> &x)
   return false;
 }
 
-double korali::vectorNorm(const std::vector<double> &x)
+double vectorNorm(const std::vector<double> &x)
 {
   double norm = 0.;
   for (size_t i = 0; i < x.size(); i++) norm += x[i] * x[i];
   return sqrt(norm);
 }
 
-double korali::vectorDistance(const std::vector<double> &x, const std::vector<double> &y)
+double vectorDistance(const std::vector<double> &x, const std::vector<double> &y)
 {
   double norm = 0.;
   for (size_t i = 0; i < x.size(); i++)
@@ -49,7 +51,7 @@ double korali::vectorDistance(const std::vector<double> &x, const std::vector<do
   return sqrt(norm);
 }
 
-std::string korali::getTimestamp()
+std::string getTimestamp()
 {
   time_t rawtime;
   time(&rawtime);
@@ -57,16 +59,18 @@ std::string korali::getTimestamp()
   return curTime.substr(0, curTime.size() - 1);
 }
 
-size_t korali::getTimehash()
+size_t getTimehash()
 {
   return std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::system_clock::now().time_since_epoch()).count();
 }
 
-// CRC Implementation taken from https://barrgroup.com/embedded-systems/how-to/korali::crc-calculation-c-code
-korali::crc crcTable[256];
-void korali::crcInit(void)
+/**
+* @brief CRC table Implementation taken from https://barrgroup.com/embedded-systems/how-to/crc-calculation-c-code
+*/
+crc crcTable[256];
+void crcInit(void)
 {
-  korali::crc remainder;
+  crc remainder;
 
   /*
      * Compute the remainder of each possible dividend.
@@ -104,11 +108,11 @@ void korali::crcInit(void)
 
 } /* crcInit() */
 
-korali::crc korali::crcFast(uint8_t const message[], size_t nBytes)
+crc crcFast(uint8_t const message[], size_t nBytes)
 {
   uint8_t data;
   uint32_t remainder = 0;
-  for (int byte = 0; byte < nBytes; ++byte)
+  for (size_t byte = 0; byte < nBytes; ++byte)
   {
     data = message[byte] ^ (remainder >> (WIDTH - 8));
     remainder = crcTable[data] ^ (remainder << 8);
@@ -116,7 +120,7 @@ korali::crc korali::crcFast(uint8_t const message[], size_t nBytes)
   return (remainder);
 }
 
-char korali::decimalToHexChar(const uint8_t byte)
+char decimalToHexChar(const uint8_t byte)
 {
   if (byte == 0) return '0';
   if (byte == 1) return '1';
@@ -139,7 +143,7 @@ char korali::decimalToHexChar(const uint8_t byte)
   return '0';
 }
 
-uint8_t korali::hexCharToDecimal(const char x)
+uint8_t hexCharToDecimal(const char x)
 {
   if (x == '0') return 0;
   if (x == '1') return 1;
@@ -162,17 +166,19 @@ uint8_t korali::hexCharToDecimal(const char x)
   return 0;
 }
 
-uint8_t korali::hexPairToByte(const char *src)
+uint8_t hexPairToByte(const char *src)
 {
   uint8_t bH = hexCharToDecimal(src[0]);
   uint8_t bL = hexCharToDecimal(src[1]);
   return bH * 16 + bL;
 }
 
-void korali::byteToHexPair(char *dst, const uint8_t byte)
+void byteToHexPair(char *dst, const uint8_t byte)
 {
   uint8_t bH = byte / 16;
   uint8_t bL = byte % 16;
   dst[0] = decimalToHexChar(bH);
   dst[1] = decimalToHexChar(bL);
 }
+
+} // namespace korali

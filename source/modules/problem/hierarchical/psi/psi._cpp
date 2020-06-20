@@ -3,13 +3,19 @@
 #include "modules/experiment/experiment.hpp"
 #include "modules/problem/hierarchical/psi/psi.hpp"
 
-void korali::problem::hierarchical::Psi::initialize()
+namespace korali
 {
-  korali::problem::Hierarchical::initialize();
+namespace problem
+{
+namespace hierarchical
+{
+void Psi::initialize()
+{
+  Hierarchical::initialize();
 
   _conditionalPriorIndexes.resize(_conditionalPriors.size());
 
-  if (_conditionalPriors.size() == 0) korali::Logger::logError("Hierarchical Bayesian (Psi) problems require at least one conditional prior\n");
+  if (_conditionalPriors.size() == 0) KORALI_LOG_ERROR("Hierarchical Bayesian (Psi) problems require at least one conditional prior\n");
 
   for (size_t i = 0; i < _conditionalPriors.size(); i++)
   {
@@ -23,37 +29,28 @@ void korali::problem::hierarchical::Psi::initialize()
       }
 
     if (foundDistribution == false)
-      korali::Logger::logError("Did not find conditional prior distribution %s\n", _conditionalPriors[i].c_str());
+      KORALI_LOG_ERROR("Did not find conditional prior distribution %s\n", _conditionalPriors[i].c_str());
   }
 
-  if (_subProblems.size() < 2) korali::Logger::logError("Hierarchical Bayesian (Psi) problem requires defining at least two executed sub-problems.\n");
+  if (_subExperiments.size() < 2) KORALI_LOG_ERROR("Hierarchical Bayesian (Psi) problem requires defining at least two executed sub-problems.\n");
 
   // Obtaining sub problem count and variable counts
-  _subProblemsCount = _subProblems.size();
+  _subProblemsCount = _subExperiments.size();
   _subProblemsVariablesCount = _conditionalPriors.size();
-
-  // Creating JSON object from string
-  _subProblemEngines = std::vector<korali::Experiment>(_subProblemsCount);
-  for (size_t i = 0; i < _subProblemsCount; i++)
-  {
-    if (_subProblemEngines[i].loadState(_subProblems[i]) == false) korali::Logger::logError("Error loading sub problem results from: %s...\n", _subProblems[i].c_str());
-    _subProblemEngines[i]._engine = _k->_engine;
-    _subProblemEngines[i].initialize();
-  }
 
   // Sub-problem correctness checks
   for (size_t i = 0; i < _subProblemsCount; i++)
   {
-    std::string problemName = _subProblemEngines[i]["Problem"]["Type"];
+    std::string problemName = (*_subExperiments[i])["Problem"]["Type"];
 
     if (problemName.rfind("Bayesian", 0) != 0)
-      korali::Logger::logError("The Hierarchical Bayesian (Psi) can only accept sub-problems of type 'Bayesian' but sub-Problem %lu is of type: '%s'.\n", i, _subProblemEngines[i]["Problem"]["Type"].get<std::string>().c_str());
+      KORALI_LOG_ERROR("The Hierarchical Bayesian (Psi) can only accept sub-problems of type 'Bayesian' but sub-Problem %lu is of type: '%s'.\n", i, (*_subExperiments[i])["Problem"]["Type"].get<std::string>().c_str());
 
-    if (_conditionalPriors.size() != _subProblemEngines[i]["Variables"].size())
-      korali::Logger::logError("Sub-problem %lu contains a different number of variables (%lu) than conditional priors in the Hierarchical Bayesian (Psi) problem (%lu).\n", i, _subProblemEngines[i]["Problem"]["Variables"].size(), _conditionalPriors.size());
+    if (_conditionalPriors.size() != (*_subExperiments[i])["Variables"].size())
+      KORALI_LOG_ERROR("Sub-problem %lu contains a different number of variables (%lu) than conditional priors in the Hierarchical Bayesian (Psi) problem (%lu).\n", i, (*_subExperiments[i])["Problem"]["Variables"].size(), _conditionalPriors.size());
 
-    if (_subProblemEngines[i]["Is Finished"] == false)
-      korali::Logger::logError("The Hierarchical Bayesian (Psi) requires that all problems have run completely, but Problem %lu has not.\n", i);
+    if ((*_subExperiments[i])["Is Finished"] == false)
+      KORALI_LOG_ERROR("The Hierarchical Bayesian (Psi) requires that all problems have run completely, but Problem %lu has not.\n", i);
   }
 
   _subProblemsSampleCoordinates.resize(_subProblemsCount);
@@ -62,15 +59,22 @@ void korali::problem::hierarchical::Psi::initialize()
 
   for (size_t i = 0; i < _subProblemsCount; i++)
   {
-    _subProblemsSampleLogPriors[i] = _subProblemEngines[i]["Solver"]["Sample LogPrior Database"].get<std::vector<double>>();
-    _subProblemsSampleLogLikelihoods[i] = _subProblemEngines[i]["Solver"]["Sample LogLikelihood Database"].get<std::vector<double>>();
-    _subProblemsSampleCoordinates[i] = _subProblemEngines[i]["Solver"]["Sample Database"].get<std::vector<std::vector<double>>>();
+    try
+    {
+      _subProblemsSampleLogPriors[i] = (*_subExperiments[i])["Solver"]["Sample LogPrior Database"].get<std::vector<double>>();
+      _subProblemsSampleLogLikelihoods[i] = (*_subExperiments[i])["Solver"]["Sample LogLikelihood Database"].get<std::vector<double>>();
+      _subProblemsSampleCoordinates[i] = (*_subExperiments[i])["Solver"]["Sample Database"].get<std::vector<std::vector<double>>>();
+    }
+    catch (std::exception &e)
+    {
+      KORALI_LOG_ERROR("Error reading the sample database from sub-problem: %lu. Was it a sampling experiment?\n", i);
+    }
 
     for (size_t j = 0; j < _subProblemsSampleLogPriors.size(); j++)
     {
       double expPrior = exp(_subProblemsSampleLogPriors[i][j]);
       if (std::isfinite(expPrior) == false)
-        korali::Logger::logError("Non finite (%lf) prior has been detected at sample %zu in subproblem %zu.\n", expPrior, j, i);
+        KORALI_LOG_ERROR("Non finite (%lf) prior has been detected at sample %zu in subproblem %zu.\n", expPrior, j, i);
     }
   }
 
@@ -103,7 +107,7 @@ void korali::problem::hierarchical::Psi::initialize()
             pointer = _k->_distributions[_conditionalPriorIndexes[i]]->getPropertyPointer(key);
             foundValue = true;
           }
-        if (foundValue == false) korali::Logger::logError("No variable name specified that satisfies conditional prior property \"%s\" with key: \"%s\".\n", key.c_str(), value.c_str());
+        if (foundValue == false) KORALI_LOG_ERROR("No variable name specified that satisfies conditional prior property \"%s\" with key: \"%s\".\n", key.c_str(), value.c_str());
 
         _conditionalPriorInfos[i]._samplePointers.push_back(pointer);
         _conditionalPriorInfos[i]._samplePositions.push_back(position);
@@ -111,22 +115,21 @@ void korali::problem::hierarchical::Psi::initialize()
   }
 }
 
-void korali::problem::hierarchical::Psi::updateConditionalPriors(korali::Sample &sample)
+void Psi::updateConditionalPriors(Sample &sample)
 {
   for (size_t i = 0; i < _conditionalPriors.size(); i++)
   {
     for (size_t j = 0; j < _conditionalPriorInfos[i]._samplePositions.size(); j++)
       *(_conditionalPriorInfos[i]._samplePointers[j]) = sample["Parameters"][_conditionalPriorInfos[i]._samplePositions[j]];
-    ;
     _k->_distributions[_conditionalPriorIndexes[i]]->updateDistribution();
   }
 }
 
-void korali::problem::hierarchical::Psi::evaluateLogLikelihood(korali::Sample &sample)
+void Psi::evaluateLogLikelihood(Sample &sample)
 {
   if (isSampleFeasible(sample) == false)
   {
-    sample["logLikelihood"] = -korali::Inf;
+    sample["logLikelihood"] = -Inf;
     return;
   };
 
@@ -149,10 +152,16 @@ void korali::problem::hierarchical::Psi::evaluateLogLikelihood(korali::Sample &s
 
     if (std::isnan(logLikelihood))
     {
-      sample["logLikelihood"] = -korali::Inf;
+      sample["logLikelihood"] = -Inf;
       return;
     };
   }
 
   sample["logLikelihood"] = logLikelihood;
 }
+
+} // namespace hierarchical
+
+} // namespace problem
+
+} // namespace korali

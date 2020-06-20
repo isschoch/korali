@@ -3,12 +3,14 @@
 #include "auxiliar/py2json.hpp"
 #include "sample/sample.hpp"
 
-korali::KoraliJson::KoraliJson()
+namespace korali
+{
+KoraliJson::KoraliJson()
 {
   _opt = &_js;
 }
 
-void korali::KoraliJson::traverseKey(pybind11::object key)
+void KoraliJson::traverseKey(pybind11::object key)
 {
   if (pybind11::isinstance<pybind11::str>(key))
   {
@@ -28,20 +30,20 @@ void korali::KoraliJson::traverseKey(pybind11::object key)
   exit(-1);
 }
 
-std::string korali::KoraliJson::get()
+std::string KoraliJson::get()
 {
   auto ret = _opt->dump(2);
   _opt = &_js;
   return ret;
 }
 
-void korali::KoraliJson::set(const std::string &js)
+void KoraliJson::set(const std::string &js)
 {
   *_opt = knlohmann::json::parse(js);
   _opt = &_js;
 }
 
-void korali::KoraliJson::setItem(pybind11::object key, pybind11::object val)
+void KoraliJson::setItem(const pybind11::object key, const pybind11::object val)
 {
   traverseKey(key);
 
@@ -49,11 +51,11 @@ void korali::KoraliJson::setItem(pybind11::object key, pybind11::object val)
   _opt = &_js;
 }
 
-pybind11::object korali::KoraliJson::getItem(pybind11::object key)
+pybind11::object KoraliJson::getItem(const pybind11::object key)
 {
   traverseKey(key);
 
-  if (JsonInterface::isElemental(*_opt))
+  if (isElemental(*_opt))
   {
     auto tmp = _opt;
     _opt = &_js;
@@ -63,28 +65,35 @@ pybind11::object korali::KoraliJson::getItem(pybind11::object key)
   return pybind11::cast(this);
 }
 
-knlohmann::json &korali::KoraliJson::operator[](const std::string &key)
+knlohmann::json &KoraliJson::operator[](const std::string &key)
 {
   return _js[key];
 }
 
-knlohmann::json &korali::KoraliJson::operator[](const unsigned long int &key)
+knlohmann::json &KoraliJson::operator[](const unsigned long int &key)
 {
   return _js[key];
 }
 
-knlohmann::json &korali::KoraliJson::getJson()
+knlohmann::json &KoraliJson::getJson()
 {
   return _js;
 }
 
-void korali::KoraliJson::setJson(knlohmann::json &js)
+void KoraliJson::getCopy(knlohmann::json &dst) const
+{
+  dst = _js;
+}
+
+void KoraliJson::setJson(knlohmann::json &js)
 {
   _js = js;
 }
 
-bool korali::KoraliJson::contains(const std::string &key)
+bool KoraliJson::contains(const std::string &key)
 {
   if (_js.find(key) == _js.end()) return false;
   return true;
 }
+
+} // namespace korali

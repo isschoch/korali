@@ -1,4 +1,5 @@
-Full re-run of all basic tutorials for a comprehensive sanity check
-##################################################################### 
+Test correct execution of solvers with non 0815 parametrization.
+#################################################################
 
-Full re-run all basic tutorials to make sure none of them fail after any commit.
+This test runs python scripts that set up a Korali problem and run Korali solvers. Solvers will be extensively configured to check for corner cases.
+

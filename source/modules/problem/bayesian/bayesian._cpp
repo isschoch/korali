@@ -1,6 +1,10 @@
 #include "modules/problem/bayesian/bayesian.hpp"
 
-void korali::problem::Bayesian::initialize()
+namespace korali
+{
+namespace problem
+{
+void Bayesian::initialize()
 {
   for (size_t i = 0; i < _k->_variables.size(); i++)
   {
@@ -14,11 +18,11 @@ void korali::problem::Bayesian::initialize()
       }
 
     if (foundDistribution == false)
-      korali::Logger::logError("Did not find distribution %s, specified by variable %s\n", _k->_variables[i]->_priorDistribution.c_str(), _k->_variables[i]->_name.c_str());
+      KORALI_LOG_ERROR("Did not find distribution %s, specified by variable %s\n", _k->_variables[i]->_priorDistribution.c_str(), _k->_variables[i]->_name.c_str());
   }
 }
 
-void korali::problem::Bayesian::evaluateLogPrior(korali::Sample &sample)
+void Bayesian::evaluateLogPrior(Sample &sample)
 {
   double logPrior = 0.0;
 
@@ -28,15 +32,15 @@ void korali::problem::Bayesian::evaluateLogPrior(korali::Sample &sample)
   sample["logPrior"] = logPrior;
 }
 
-void korali::problem::Bayesian::evaluateLogPosterior(korali::Sample &sample)
+void Bayesian::evaluateLogPosterior(Sample &sample)
 {
   int sampleId = sample["Sample Id"];
   evaluateLogPrior(sample);
 
-  if (sample["logPrior"] == -korali::Inf)
+  if (sample["logPrior"] == -Inf)
   {
-    sample["logLikelihood"] = -korali::Inf;
-    sample["logPosterior"] = -korali::Inf;
+    sample["logLikelihood"] = -Inf;
+    sample["logPosterior"] = -Inf;
   }
   else
   {
@@ -45,32 +49,24 @@ void korali::problem::Bayesian::evaluateLogPosterior(korali::Sample &sample)
     double logLikelihood = sample["logLikelihood"];
     double logPosterior = logPrior + logLikelihood;
 
-    if (std::isnan(logLikelihood) == true) korali::Logger::logError("Sample %d returned NaN logLikelihood evaluation.\n", sampleId);
+    if (std::isnan(logLikelihood) == true) KORALI_LOG_ERROR("Sample %d returned NaN logLikelihood evaluation.\n", sampleId);
 
-    sample["logPosterior"] = logPrior + logLikelihood;
+    sample["logPosterior"] = logPosterior;
   }
 }
 
-bool korali::problem::Bayesian::isSampleFeasible(korali::Sample &sample)
-{
-  for (size_t i = 0; i < sample["Parameters"].size(); i++)
-    if (isfinite(_k->_distributions[_k->_variables[i]->_distributionIndex]->getLogDensity(sample["Parameters"][i])) == false)
-    {
-      sample["Is Feasible"] = false;
-      return false;
-    }
-  sample["Is Feasible"] = true;
-  return true;
-}
-
-void korali::problem::Bayesian::evaluate(korali::Sample &sample)
+void Bayesian::evaluate(Sample &sample)
 {
   evaluateLogPosterior(sample);
   sample["F(x)"] = sample["logPosterior"];
   sample["P(x)"] = sample["logPosterior"];
 }
 
-void korali::problem::Bayesian::evaluateGradient(korali::Sample &sample)
+void Bayesian::evaluateGradient(Sample &sample)
 {
   evaluateLoglikelihoodGradient(sample);
 }
+
+} // namespace problem
+
+} // namespace korali

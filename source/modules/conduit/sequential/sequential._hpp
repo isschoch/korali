@@ -8,7 +8,7 @@ namespace korali
 {
 namespace conduit
 {
-class Sequential : public korali::Conduit
+class Sequential : public Conduit
 {
   private:
   public:
@@ -17,7 +17,7 @@ class Sequential : public korali::Conduit
  * The purpose is to update its state with new information without finalizing the function's environment.
  * @param sample Sample to update.
  */
-  void update(korali::Sample &sample) override;
+  void update(Sample &sample) override;
 
   /**
   * @brief Initializes the conduit's configuration, only once per process.
@@ -28,7 +28,7 @@ class Sequential : public korali::Conduit
   * @brief Starts/Resumes the processing of a new sample.
   * @param sample Sample to start/resume.
   */
-  void processSample(korali::Sample &sample) override;
+  void processSample(Sample &sample) override;
   void broadcastGlobals(knlohmann::json &globalsJs) override;
 };
 

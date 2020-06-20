@@ -25,8 +25,6 @@ It is not necessary to specify any additional configuration for the sequential c
 
 This scenario assumes that the model function is also sequential. 
 
-**Examples**: All of the :ref:`*basic tutorials* <basic-tutorials>` offered in this documentation. 
-
 Local Parallelism
 =================================
 
@@ -59,8 +57,6 @@ To enable this, we use the :ref:`Concurrent Conduit <module-conduit-concurrent>`
    
 In this case, Korali will create 16 worker processes (see: concurrent jobs setting), using 16 CPU nodes to run the model.
 
-**Example**: See the following concurrent execution :ref:`tutorial <concurrentexecution>`. 
-
 Parallel Sampling - Parallel Model
 --------------------------------------
 
@@ -82,8 +78,6 @@ The :ref:`Concurrent Conduit <module-conduit-concurrent>` allows for the paralle
 .. image:: images/conduit_concurrent_ext.png
    :height: 250
    :align: center
-
-**Example**: See the following concurrent execution :ref:`tutorial <concurrentexecution>`, where an external application is used. 
 
 Distributed Parallelism
 =================================
@@ -179,8 +173,6 @@ And run it using :code:`mpirun` or similar launch command, for example:
       
 Where the run will employ 257 cores, one for the engine. With the reamining 256 ranks, it will create 64 worker teams of 4 ranks each.
  
-**Example**: See the following concurrent execution :ref:`tutorial <runningmpi>`.
- 
 Distributed Sampling - External Application
 --------------------------------------------------
 
@@ -189,8 +181,6 @@ This is the case in which we run an external application in a distributed system
 .. image:: images/conduit_distributed_ext.png
    :height: 250
    :align: center   
-
-**Example**: See the following :ref:`example <LAMMPS>`, which runs an external application (LAMMPS) via command line and obtains the result from a file.
 
 
 Distributed Multi-Experiment Runs
@@ -201,8 +191,6 @@ Korali conduits are capable of running multiple, independent experiments simulta
 .. image:: images/korali_multiple.png
    :align: center   
    
-**Example**: See the following :ref:`example <RBCRelax>`, which runs multiple experiments, each employing a GPU-based model (Mirheo) to perform computations.
- 
 Obtaining Profiling Information
 =======================================
 

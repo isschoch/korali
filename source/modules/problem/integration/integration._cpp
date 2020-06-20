@@ -1,14 +1,18 @@
 #include "modules/problem/integration/integration.hpp"
 
-void korali::problem::Integration::initialize()
+namespace korali
 {
-  if (_k->_variables.size() == 0) korali::Logger::logError("Integration problems require at least one variable.\n");
+namespace problem
+{
+void Integration::initialize()
+{
+  if (_k->_variables.size() == 0) KORALI_LOG_ERROR("Integration problems require at least one variable.\n");
 
   for (size_t i = 0; i < _k->_variables.size(); i++)
   {
-    if (_k->_variables[i]->_numberOfGridpoints <= 0) korali::Logger::logError("'Number Of Gridpoints' for variable %s must be a strictly positive integer", _k->_variables[i]->_name.c_str());
+    if (_k->_variables[i]->_numberOfGridpoints <= 0) KORALI_LOG_ERROR("'Number Of Gridpoints' for variable %s must be a strictly positive integer", _k->_variables[i]->_name.c_str());
 
-    if (_k->_variables[i]->_upperBound <= _k->_variables[i]->_lowerBound) korali::Logger::logError("'Upper Bound' is not strictly bigger then 'Lower Bound' for variable %s.\n", _k->_variables[i]->_name.c_str());
+    if (_k->_variables[i]->_upperBound <= _k->_variables[i]->_lowerBound) KORALI_LOG_ERROR("'Upper Bound' is not strictly bigger then 'Lower Bound' for variable %s.\n", _k->_variables[i]->_name.c_str());
     double intervalSize = _k->_variables[i]->_upperBound - _k->_variables[i]->_lowerBound;
     double deltaX = intervalSize / (_k->_variables[i]->_numberOfGridpoints - 1);
 
@@ -24,16 +28,16 @@ void korali::problem::Integration::initialize()
         }
 
       if (_k->_variables[i]->_samplingDistribution == " ")
-        korali::Logger::logError("Please specify distribution to sample for variable %s\n", _k->_variables[i]->_name.c_str());
+        KORALI_LOG_ERROR("Please specify distribution to sample for variable %s\n", _k->_variables[i]->_name.c_str());
       else if (foundDistribution == false)
-        korali::Logger::logError("Did not find distribution %s, specified by variable %s\n", _k->_variables[i]->_samplingDistribution.c_str(), _k->_variables[i]->_name.c_str());
+        KORALI_LOG_ERROR("Did not find distribution %s, specified by variable %s\n", _k->_variables[i]->_samplingDistribution.c_str(), _k->_variables[i]->_name.c_str());
 
       _k->_variables[i]->_quadratureWeights.resize(1);
       _k->_variables[i]->_quadratureWeights[0] = intervalSize / _k->_variables[i]->_numberOfGridpoints;
     }
     else if (_integrationMethod == "Custom")
     {
-      if (_k->_variables[i]->_samplePoints.size() != _k->_variables[i]->_quadratureWeights.size()) korali::Logger::logError("Number of 'Sample Points' is not equal to number of 'Quadrature Points' provided for variable %s\n", _k->_variables[i]->_name.c_str());
+      if (_k->_variables[i]->_samplePoints.size() != _k->_variables[i]->_quadratureWeights.size()) KORALI_LOG_ERROR("Number of 'Sample Points' is not equal to number of 'Quadrature Points' provided for variable %s\n", _k->_variables[i]->_name.c_str());
     }
     else
     {
@@ -72,25 +76,16 @@ void korali::problem::Integration::initialize()
   }
 }
 
-void korali::problem::Integration::execute(korali::Sample &sample)
+void Integration::execute(Sample &sample)
 {
   // Evaluating Sample
   sample.run(_integrand);
 
-  std::string sampleString = "['Evaluation']";
+  auto evaluation = KORALI_GET(double, sample, "Evaluation");
 
-  if (korali::JsonInterface::isDefined(sample._js.getJson(), sampleString) == false)
-    korali::Logger::logError("The %s problem needs a function evaluation. Be sure that you assign a value to the %s attribute in the model definition.\n", _k->_problem->getType().c_str(), sampleString.c_str());
-
-  double evaluation = -korali::Inf;
-  try
-  {
-    evaluation = sample["Evaluation"];
-  }
-  catch (const std::exception &e)
-  {
-    korali::Logger::logError("Missing or incorrect value of 'Evaluation' returned by the sample evaluation. \n   + Solution: Make sure your model is storing its Evaluation value, e.g., sample[\"F(x)\"] = value(s).\n   + Cause: %s\n", e.what());
-  }
-
-  if (std::isnan(evaluation)) korali::Logger::logError("The function evaluation returned NaN.\n");
+  if (std::isnan(evaluation)) KORALI_LOG_ERROR("The function evaluation returned NaN.\n");
 }
+
+} // namespace problem
+
+} // namespace korali

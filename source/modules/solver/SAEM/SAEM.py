@@ -25,7 +25,6 @@ def plotVariables(genList):
   sample_means = np.zeros((len(genList), numLatent))
   sample_sdevs = np.zeros((len(genList), numLatent))
   hyperparams = np.zeros((len(genList), numHyper))
-  gammas = np.zeros((len(genList)))
 
   # determine which are latent, vs. hyperparameters
   latentVars = []
@@ -41,7 +40,6 @@ def plotVariables(genList):
     sample_sdevs[
         idx, ...] = genList[i]["Solver"]["Current Sample Standard Deviations"]
     hyperparams[idx, ...] = genList[i]["Solver"]["Current Hyperparameters"]
-    gammas[idx] = genList[i]["Solver"]["Gamma"]
 
   fig, ax = plt.subplots(
       nrows=max(numLatent, numHyper) + 1, ncols=2, figsize=(8, 20), dpi=60)
@@ -61,7 +59,6 @@ def plotVariables(genList):
   for hyperIdx in range(numHyper):
     ax[hyperIdx, 1].plot(generations, hyperparams[:, hyperIdx])
     ax[hyperIdx, 1].set_title(hyperVars[hyperIdx]["Name"])
-  ax[-1, 0].plot(generations, gammas)
   ax[-1, 0].set_title("gamma")
 
   return fig, ax

@@ -1,0 +1,13 @@
+*.err
+*.lammps
+*.out
+*.swp
+*.txt
+.DS_Store
+_*.py
+_*.sh
+__pycache__
+_mir_out
+_result_*
+
+!CMakeLists.txt

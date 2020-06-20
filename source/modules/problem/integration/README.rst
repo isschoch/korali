@@ -1,5 +1,5 @@
 **************************
-integration
+Integration
 **************************
 
 The integration problem is considering the numerical approximation of integrals

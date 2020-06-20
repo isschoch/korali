@@ -1,2 +1,6 @@
 #include "modules/experiment/experiment.hpp"
 #include "modules/layer/layer.hpp"
+
+namespace korali
+{
+} // namespace korali

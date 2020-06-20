@@ -7,7 +7,7 @@ namespace korali
 {
 namespace solver
 {
-class Executor : public korali::Solver
+class Executor : public Solver
 {
   private:
   public:

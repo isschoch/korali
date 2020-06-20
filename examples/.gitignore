@@ -1,0 +1,14 @@
+run-cmaes
+_*
+run-cmaes-direct
+run-lmcma
+run-lmcma-direct
+run-ccmaes
+run-tmcmc
+run-mcmc
+run-dea
+_korali_results
+*.json
+_executor_output
+_execution_output
+__pycache__

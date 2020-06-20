@@ -6,14 +6,13 @@
 #include "modules/module.hpp"
 #include "modules/solver/solver.hpp"
 #include <chrono>
-#include <stack>
 #include <vector>
 
 namespace korali
 {
 class Engine;
 
-class Conduit : public korali::Module
+class Conduit : public Module
 {
   public:
   /**
@@ -25,7 +24,7 @@ class Conduit : public korali::Module
  * @brief Accepts a sample for processing.
  * @param sample A Korali sample
  */
-  virtual void processSample(korali::Sample &sample) = 0;
+  virtual void processSample(Sample &sample) = 0;
 
   /**
   * @brief Initializes the worker/server bifurcation in the conduit
@@ -65,38 +64,38 @@ class Conduit : public korali::Module
  * @brief Starts the execution of the sample.
  * @param sample A Korali sample
  */
-  void start(korali::Sample &sample);
+  void start(Sample &sample);
 
   /**
   * @brief Waits for a given sample to finish. The experiment will not continue until the sample has been evaluated.
   * @param sample A Korali sample
   */
-  void wait(korali::Sample &sample);
+  void wait(Sample &sample);
 
   /**
    * @brief Waits for a set of sample to finish. The experiment will not continue until all samples have been evaluated.
    * @param samples A list of Korali samples
    */
-  void waitAll(std::vector<korali::Sample> &samples);
+  void waitAll(std::vector<Sample> &samples);
 
   /**
   * @brief Waits for a set of sample to finish. The experiment will not continue until at least one of the samples have been evaluated.
   * @param samples A list of Korali samples
   * @return Position in the vector of the sample that has finished.
   */
-  size_t waitAny(std::vector<korali::Sample> &samples);
+  size_t waitAny(std::vector<Sample> &samples);
 
   /**
  * @brief Sends sample information back to engine
  * @param sample Sample to send back
  */
-  virtual void update(korali::Sample &sample) = 0;
+  virtual void update(Sample &sample) = 0;
 
   /**
   * @brief Stacks a new Engine into the engine stack
   * @param engine A Korali Engine
   */
-  virtual void stackEngine(korali::Engine *engine){};
+  virtual void stackEngine(Engine *engine){};
 
   /**
   * @brief Pops the current Engine from the engine stack

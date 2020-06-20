@@ -25,7 +25,7 @@ e["Variables"][0]["Initial Mean"] = 0.0
 e["Variables"][0]["Initial Standard Deviation"] = 1.0
 
 # Configuring the MCMC sampler parameters
-e["Solver"]["Type"] = "MCMC"
+e["Solver"]["Type"] = "Sampler/MCMC"
 e["Solver"]["Burn In"] = 500
 e["Solver"]["Use Adaptive Sampling"] = True
 e["Solver"]["Termination Criteria"]["Max Samples"] = 10000

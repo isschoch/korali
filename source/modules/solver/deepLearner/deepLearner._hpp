@@ -11,15 +11,15 @@ namespace korali
 {
 namespace solver
 {
-class DeepLearner : public korali::Solver
+class DeepLearner : public Solver
 {
   public:
   /**
  * @brief Korali engine for optimizing NN weights and biases
  */
-  korali::problem::SupervisedLearning *_problem;
+  problem::SupervisedLearning *_problem;
 
-  std::vector<std::vector<double>> test(const std::vector<std::vector<double>> &inputBatch) override;
+  std::vector<std::vector<double>> evaluate(const std::vector<std::vector<double>> &inputBatch) override;
 
   void initialize() override;
   void runGeneration() override;

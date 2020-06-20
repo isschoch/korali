@@ -15,7 +15,7 @@ class Solver;
 class Problem;
 class Engine;
 
-class Experiment : public korali::Module
+class Experiment : public Module
 {
   public:
   Experiment();
@@ -26,27 +26,27 @@ class Experiment : public korali::Module
   /**
   * @brief JSON object to store the experiment's configuration
   */
-  korali::KoraliJson _js;
+  KoraliJson _js;
 
   /**
   * @brief A pointer to the Experiment's logger object.
  */
-  korali::Logger *_logger;
+  Logger *_logger;
 
   /**
  * @brief A pointer to the parent engine
  */
-  korali::Engine *_engine;
+  Engine *_engine;
 
   /**
   * @brief JSON object to details of all the samples that have been executed, if requested by the user.
   */
-  korali::KoraliJson _sampleInfo;
+  KoraliJson _sampleInfo;
 
   /**
  * @brief Maps sample Ids to their pointers
  */
-  std::map<size_t, korali::Sample *> sampleIdMap;
+  std::map<size_t, Sample *> sampleIdMap;
 
   /**
   * @brief Log file onto which to output log information. (Default = stdout)
@@ -68,27 +68,21 @@ class Experiment : public korali::Module
   * @param key A pybind11 object acting as JSON key (number or string).
   * @return A pybind11 object
  */
-  pybind11::object getItem(pybind11::object key);
+  pybind11::object getItem(const pybind11::object key);
 
   /**
   * @brief Sets an item on the JSON object at the current pointer position.
   * @param key A pybind11 object acting as JSON key (number or string).
   * @param val The value of the item to set.
  */
-  void setItem(pybind11::object key, pybind11::object val);
+  void setItem(const pybind11::object key, const pybind11::object val);
 
   /**
-  * @brief Load the state of a previous experiment's execution.
+  * @brief Load the state of an experiment from a Korali result file.
   * @param path Path from which to load the experiment state.
-  * @return True, if successful; false, otherwise.
- */
-  bool loadState(std::string path);
-
-  /**
-  * @brief Load the state of a previous experiment's execution from the experiment's result path.
-  * @return True, if successful; false, otherwise.
- */
-  bool loadState();
+  * @return true, if file was found; false, otherwise
+  */
+  bool loadState(const std::string &path);
 
   /**
    * @brief Saves the state into the experiment's result path.
@@ -115,11 +109,11 @@ class Experiment : public korali::Module
   knlohmann::json &operator[](const unsigned long int &key);
 
   /**
-    * @brief For solver modules which have been trained, test returns an infered output batch, from a batch of inputs to process.
+    * @brief For solver modules which have been trained, test returns an inferred output batch, from a batch of inputs to process.
     * @param inputBatch The inputs from which to infer outputs.
     * @return The inferred outputs
    */
-  std::vector<std::vector<double>> test(const std::vector<std::vector<double>> &inputBatch);
+  std::vector<std::vector<double>> evaluate(const std::vector<std::vector<double>> &inputBatch);
 };
 
 } // namespace korali

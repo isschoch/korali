@@ -11,6 +11,7 @@ function print_help ()
  echo "        [--prereqs]"
  echo "        [--rebuild]"
  echo "        [--debug]"
+ echo "        [--werror]"
  echo "        [--jobs=N]"
  echo "        [--help]"
  echo ""
@@ -18,6 +19,7 @@ function print_help ()
  echo " --prereqs Allows Korali to install any missing prerequisites."
  echo " --rebuild Cleans and rebuilds/installs Korali for development purposes."
  echo " --debug builds a non-optimized Korali for debugging purposes."
+ echo " --werror For testing purposes, it treats warnings as errors during compilation."
  echo " --jobs=N Specifies N jobs to use when building Korali."
  echo " --help Displays this help message."
 }
@@ -52,6 +54,7 @@ function check()
 
 INSTALLREQS=0
 NJOBS=4
+WARNINGFLAGS=
 OPTFLAGS="-O3"
 
 for i in "$@"
@@ -59,6 +62,10 @@ do
 case $i in
     --prereqs)
     INSTALLREQS=1
+    shift 
+    ;;
+    --werror)
+    WARNINGFLAGS="-Werror"
     shift 
     ;;
     --debug)
@@ -73,6 +80,7 @@ case $i in
     logEcho "[Korali] Cleaning Korali for new build..."
     python3 -m pip uninstall -y korali >> $logFile 2>&1
     make -C source clean >> $logFile 2>&1
+    make -C external/libco clean >> $logFile 2>&1
     shift 
     ;;
     --help)
@@ -129,7 +137,7 @@ fi
 
 logEcho "[Korali] Checking Pre-requisites..."
 
-log "Checking for C++ Compiler..."
+log "[Korali] Checking for C++ Compiler..."
 
 $CXX --version > /dev/null 2>&1
 DETECTED_CXX=$?
@@ -152,6 +160,12 @@ if [ $DETECTED_CRAY      -eq 0 ]; then USE_CXX=CC;      fi;
 if [ $DETECTED_CLANG     -eq 0 ]; then USE_CXX=clang++; fi;
 if [ $DETECTED_CXX       -eq 0 ]; then USE_CXX=$CXX;    fi;
 
+######## Updating submodules ##########
+
+logEcho "[Korali] Updating submodules..."
+git submodule init >> $logFile 2>&1; check
+git submodule update --remote --force --recursive >> $logFile 2>&1; check
+
 ######## Checking for Prerequisites ########
 
 installFlag=
@@ -159,18 +173,43 @@ if [ $INSTALLREQS -eq 0 ]; then
  installFlag='--no-install'
 fi
 
+
 ## Looking for CMake
 
-#./prereqs/install_CMake.sh $installFlag --jobs=$NJOBS
-#if [ ! $? == 0 ]; then
-# logEcho "[Korali] Error: CMake not found or older version than 3.0. Solutions:"
-# logEcho "         . Have 'cmake' version >3.0 correctly installed and in your PATH environment variable"
-# logEcho "         . Run './install --prereqs' to allow Korali install missing prerequisites automatically."
-# exitWithError
-#fi
+./external/install_CMake.sh $installFlag --jobs=$NJOBS
+if [ ! $? == 0 ]; then
+ logEcho "[Korali] Error: CMake not found or older version than 3.0. Solutions:"
+ logEcho "         . Have 'cmake' version >3.0 correctly installed and in your PATH environment variable"
+ logEcho "         . Run './install --prereqs' to allow Korali install missing prerequisites automatically."
+ exitWithError
+fi
+
+## Looking for libco
+CXX=$USE_CXX ./external/install_libco.sh $installFlag --jobs=$NJOBS
+if [ ! $? == 0 ]; then
+ logEcho "[Korali] Error: Libco not found. Solutions"
+ logEcho "         . Run './install --prereqs' to allow Korali install missing prerequisites automatically."
+ exitWithError
+fi
+
+## Looking for rtnorm
+CXX=$USE_CXX ./external/install_rtnorm.sh $installFlag --jobs=$NJOBS
+if [ ! $? == 0 ]; then
+ logEcho "[Korali] Error: rtnorm not found. Solutions"
+ logEcho "         . Run './install --prereqs' to allow Korali install missing prerequisites automatically."
+ exitWithError
+fi
+
+## Looking for Eigen
+CXX=$USE_CXX ./external/install_eigen.sh $installFlag --jobs=$NJOBS
+if [ ! $? == 0 ]; then
+ logEcho "[Korali] Error: Eigen not found. Solutions"
+ logEcho "         . Run './install --prereqs' to allow Korali install missing prerequisites automatically."
+ exitWithError
+fi
 
 ## Looking for GSL
-./prereqs/install_gsl.sh $installFlag --jobs=$NJOBS
+CXX=$USE_CXX ./external/install_gsl.sh $installFlag --jobs=$NJOBS
 if [ ! $? == 0 ]; then
  logEcho "[Korali] Error: GSL not found or older version than 2.5. Solutions"
  logEcho "         . Have 'gsl-config' version >2.5 correctly installed and in your PATH environment variable"
@@ -178,8 +217,16 @@ if [ ! $? == 0 ]; then
  exitWithError
 fi
 
+## Looking for libGP
+CXX=$USE_CXX ./external/install_libGP.sh $installFlag
+if [ ! $? == 0 ]; then
+ logEcho "[Korali] libGP not found. Try either of these solutions:"
+ logEcho "         . Run './install --prereqs' to allow Korali install missing prerequisites automatically."
+ exitWithError
+fi
+
 ## Looking for oneDNN
-./prereqs/install_oneDNN.sh $installFlag --jobs=$NJOBS
+CXX=$USE_CXX ./external/install_oneDNN.sh $installFlag --jobs=$NJOBS
 if [ ! $? == 0 ]; then
  logEcho "[Korali] oneDNN not found. Try either of these solutions:"
  logEcho "         1. Define the \$DNNLROOT environment variable to indicate the installation folder of oneDNN."
@@ -257,24 +304,41 @@ fi
 
 echo "[Korali] Creating configuration files..."
 
-DNNLROOT=`readlink prereqs/oneDNNlink`; check
+DNNLROOT=`readlink external/oneDNNlink`; check
 ONEDNNCFLAGS="-D_KORALI_USE_ONEDNN -I${DNNLROOT}/include"
-ONEDNNLDFLAGS="-Wl,-rpath -Wl,${DNNLROOT}/lib64/ -L${DNNLROOT}/lib64/ -Wl,-rpath -Wl,${DNNLROOT}/lib/ -L${DNNLROOT}/lib/ -ldnnl"
+ONEDNNLIBS="-Wl,-rpath -Wl,${DNNLROOT}/lib64/ -L${DNNLROOT}/lib64/ -Wl,-rpath -Wl,${DNNLROOT}/lib/ -L${DNNLROOT}/lib -ldnnl"
+
+LIBGPROOT=`readlink external/libGPlink`; check
+LIBGPCFLAGS="-I${LIBGPROOT}/include"
+LIBGPLIBS="-Wl,-rpath -Wl,${LIBGPROOT}/lib64/ -L${LIBGPROOT}/lib64/ -Wl,-rpath -Wl,${LIBGPROOT}/lib -L${LIBGPROOT}/lib -lgp"
+
+LIBCOROOT=`readlink external/libcolink`; check
+LIBCOCFLAGS="-I${LIBCOROOT}"
+LIBCOLIBS="${LIBCOROOT}/libco.o"
+
+EIGENROOT=`readlink external/eigenlink`; check
+EIGENCFLAGS="-I${EIGENROOT}/include/eigen3"
  
-GSLPREFIX=`./prereqs/gsl-config --prefix`; check
-GSLCFLAGS=`./prereqs/gsl-config --cflags`; check
-GSLLIBS=`./prereqs/gsl-config --libs`; check
+RTNORMROOT=`readlink external/rtnormlink`; check
+RTNORMCFLAGS="-I${RTNORMROOT}"
+RTNORMLIBS="${RTNORMROOT}/rtnorm.o"
+
+GSLPREFIX=`./external/gsl-config --prefix`; check
+GSLCFLAGS=`./external/gsl-config --cflags`; check
+GSLLIBS=`./external/gsl-config --libs`; check
+GSLLIBS="${GSLLIBS} -L${GSLPREFIX}/lib -Wl,-rpath -Wl,${GSLPREFIX}/lib -L${GSLPREFIX}/lib64 -Wl,-rpath -Wl,${GSLPREFIX}/lib64"
+
 PYBIND11INCLUDES=`python3 -m pybind11 --includes` ; check
 PYBIND11LIBS=`python3-config --ldflags`; check
 
-CXXARCH="-std=c++14"
+CXXARCH="-std=c++17"
 which $USE_CXX | grep "cray" >> $logFile 2>&1
 if [ $? -eq 0 ]; then
   logEcho "[Korali] Assuming Cray System."
   CC -craype-verbose 2>&1 | grep "driver.CC" >> $logFile 2>&1
   if [ $? -eq 0 ]; then
    logEcho "[Korali] Detected Cray compiler."
-   CXXARCH="-hstd=c++14"
+   CXXARCH="-hstd=c++17"
    PYBIND11LIBS=`echo $PYBIND11LIBS | sed 's/-Xlinker//g' | sed 's/-export-dynamic//g'`
   fi
 fi
@@ -296,14 +360,28 @@ echo CXX=$USE_CXX > source/Makefile.conf
 echo CXXARCH=$CXXARCH >> source/Makefile.conf
 echo SHAREDLIB_FLAG=$SHAREDLIB_FLAG >> source/Makefile.conf
 echo MPIFLAGS=$MPIFLAGS >> source/Makefile.conf
+
 echo ONEDNNCFLAGS=$ONEDNNCFLAGS >> source/Makefile.conf
-echo ONEDNNLDFLAGS=$ONEDNNLDFLAGS >> source/Makefile.conf
+echo ONEDNNLIBS=$ONEDNNLIBS >> source/Makefile.conf
+
+echo LIBGPCFLAGS=$LIBGPCFLAGS >> source/Makefile.conf
+echo LIBGPLIBS=$LIBGPLIBS >> source/Makefile.conf
+
+echo LIBCOCFLAGS=$LIBCOCFLAGS >> source/Makefile.conf
+echo LIBCOLIBS=$LIBCOLIBS >> source/Makefile.conf
+
+echo RTNORMCFLAGS=$RTNORMCFLAGS >> source/Makefile.conf
+echo RTNORMLIBS=$RTNORMLIBS >> source/Makefile.conf
+
+echo EIGENCFLAGS=$EIGENCFLAGS >> source/Makefile.conf
 echo OPTFLAGS=$OPTFLAGS >> source/Makefile.conf
+echo WARNINGFLAGS=$WARNINGFLAGS >> source/Makefile.conf
 echo MACHINEARCH=$arch >> source/Makefile.conf
 
 echo GSLPREFIX=$GSLPREFIX >> source/Makefile.conf
 echo GSLCFLAGS=$GSLCFLAGS >> source/Makefile.conf
 echo GSLLIBS=$GSLLIBS  >> source/Makefile.conf
+
 echo PYBIND11INCLUDES=$PYBIND11INCLUDES >> source/Makefile.conf 
 echo PYBIND11LIBS=$PYBIND11LIBS >> source/Makefile.conf
 
@@ -323,6 +401,15 @@ if [ $? -ne 0 ]; then
   exitWithError
 fi
 
+# For macOS, adjusting library paths
+if [ "$arch" == "Darwin" ]; then
+ if [ -f ${LIBGPROOT}/lib64/libgp.dylib ]; then
+   install_name_tool -change libgp.dylib ${LIBGPROOT}/lib64/libgp.dylib source/libkorali.so; check
+ else 
+   install_name_tool -change libgp.dylib ${LIBGPROOT}/lib/libgp.dylib source/libkorali.so; check
+ fi
+fi
+
 ######## Installing Korali using pip ########
 
 logEcho "[Korali] Installing Korali..."
@@ -332,6 +419,7 @@ if [ $? -ne 0 ]; then
   logEcho "[Korali] Error obtaining libkorali.so"
   exitWithError
 fi
+
 
 python3 -m pip install . $PIP_USER --upgrade >> $logFile 2>&1
 if [ $? -ne 0 ]; then

@@ -1,0 +1,9 @@
+#include "modules/solver/sampler/sampler.hpp"
+
+namespace korali
+{
+namespace solver
+{
+} // namespace solver
+
+} // namespace korali

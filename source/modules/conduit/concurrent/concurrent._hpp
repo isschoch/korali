@@ -5,15 +5,13 @@
 #include <chrono>
 #include <map>
 #include <queue>
-#include <sys/types.h>
-#include <unistd.h>
 #include <vector>
 
 namespace korali
 {
 namespace conduit
 {
-class Concurrent : public korali::Conduit
+class Concurrent : public Conduit
 {
   private:
   void worker(int workerId);
@@ -44,14 +42,14 @@ class Concurrent : public korali::Conduit
   */
   std::queue<int> _launcherQueue;
 
-  void update(korali::Sample &sample) override;
+  void update(Sample &sample) override;
   void initServer() override;
   size_t maxConcurrency() override;
   void broadcastGlobals(knlohmann::json &sampleJs) override;
-  void processSample(korali::Sample &sample) override;
+  void processSample(Sample &sample) override;
   void initialize() override;
   void finalize() override;
-  void stackEngine(korali::Engine *) override;
+  void stackEngine(Engine *) override;
   void popEngine() override;
 };
 

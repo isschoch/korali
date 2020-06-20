@@ -1,0 +1,18 @@
+#ifndef _KORALI_SOLVER_SAMPLER_HPP_
+#define _KORALI_SOLVER_SAMPLER_HPP_
+
+#include "modules/solver/solver.hpp"
+
+namespace korali
+{
+namespace solver
+{
+class Sampler : public Solver
+{
+  public:
+};
+
+} // namespace solver
+} // namespace korali
+
+#endif // _KORALI_SOLVER_SAMPLER_HPP_

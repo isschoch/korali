@@ -1,0 +1,11 @@
+Coarse Grained Water Simulation (LAMMPS)
+================================================================================= 
+
+Simulation of water at biologically relevant timescales remains an open research topic. In the atomistic description, each atom of the water molecule is considered as a particle, and appropriate potential functions are deﬁned that govern the interactions among the atoms of one molecule and the interactions among molecules. The system is propagated in time using Newton’s second law. In order to accelerate the atomistic simulations, coarse-grained (CG) models of water have been proposed in the literature that map one or more molecules into one particle. Most of the mappings are based on rather ad-hoc assumptions. In [1] the authors proposed a data-driven approach, based on Bayesian model selection, for the evaluation of the CG model. The authors used experimental data of density, dielectric constant, surface tension, isothermal compressibility, and shear viscosity and, for each of the considered CG models, a Bayesian inference problem was solved.
+
+Here, we use Korali to run the Bayesian inference ex-periment corresponding to the CG model, where each water molecule is mapped into one CG particle. The assumed potential between the CG particles is the Lennard-Jones potential that has two parameters. The parameters of the potential are ﬁtted on density experimental measurements at a speciﬁed temperature. To hold the same statistical assumptions as in the described experiment, we use a likelihood model of type Multiplicative Normal Data. We then found the parameters that maximize the posterior distribution using CMA-ES with a population size of 16 samples per generation. For the computational model, we used LAMMPS (Large-scale Atomic/Molecular Massively Parallel Simulator) [2], a well-known molecular dynamics simulation library that models atoms or ensembles of particles in solid, liquid or gaseous state.
+
+[1] J. Zavadlav, G. Arampatzis, P. Koumoutsakos, Bayesian selection for coarse-grained models of liquid water, Scientiﬁc Reports 9 (1) (2019) 1–10. doi:10.1038/s41598-018-37471-0.
+
+[2] S. Plimpton, Fast Parallel Algorithms for Short Range Molecular Dynamics, Journal of Computational Physics 117 (June 1994) (1995) 1–19. doi:10.1006/jcph.1995.1039. http://lammps.sandia.gov
+

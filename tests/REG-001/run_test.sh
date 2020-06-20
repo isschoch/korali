@@ -1,32 +1,33 @@
 #!/bin/bash
 
-# Brief: Quickly Re-run all Python example applications for basic sanity check.
+# Check Code Formatting and documentation
 
 ###### Auxiliar Functions and Variables #########
-
+ 
 source ../functions.sh
 
 ############# STEP 1 ##############
 
-pushd ../../tutorials
+echo "[Korali] Beginning code formatting check..."
 
-logEcho "[Korali] Beginning tutorial tests..."
+pushd ../../tools/dev-tools/
+check_result
 
-for dir in ./basic/*/
-do
-  logEcho "-------------------------------------"
-  logEcho " Entering Folder: $dir"
-
-  pushd $dir >> $logFile 2>&1
-  check_result
-
-  logEcho " Runnning fast test script..."
-  ./.run_test.sh --fast >> $logFile 2>&1
-  check_result
-
-  popd >> $logFile 2>&1
-  check_result
-  logEcho "-------------------------------------"
-done
+ ./check_style_cxx.sh 
+ check_result
 
 popd
+check_result
+
+############## STEP 2 ################
+
+echo "[Korali] Beginning code formatting check..."
+
+pushd ../../docs/
+check_result
+
+ ./build.sh
+ check_result
+
+popd
+check_result

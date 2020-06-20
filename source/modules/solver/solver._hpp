@@ -1,7 +1,7 @@
 #ifndef _KORALI_SOLVERHPP_
 #define _KORALI_SOLVERHPP_
 
-#include "external/libco/libco.h"
+#include "libco.h"
 #include "modules/experiment/experiment.hpp"
 #include "modules/module.hpp"
 #include <string>
@@ -12,7 +12,7 @@
 */
 namespace korali
 {
-class Solver : public korali::Module
+class Solver : public Module
 {
   public:
   /**
@@ -40,7 +40,7 @@ class Solver : public korali::Module
     * @param inputBatch The inputs from which to infer outputs.
     * @return The inferred outputs
    */
-  virtual std::vector<std::vector<double>> test(const std::vector<std::vector<double>> &inputBatch);
+  virtual std::vector<std::vector<double>> evaluate(const std::vector<std::vector<double>> &inputBatch);
 
   /**
   * @brief Stores termination criteria for the module.

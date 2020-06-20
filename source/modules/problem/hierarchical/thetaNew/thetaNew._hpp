@@ -14,11 +14,6 @@ class ThetaNew : public korali::problem::Hierarchical
 {
   private:
   /**
-  * @brief Stores the Psi problem experiment to use as input
-  */
-  korali::Experiment _psiProblemEngine;
-
-  /**
   * @brief Stores the number of samples in the Psi problem experiment to use as input
   */
   size_t _psiProblemSampleCount;

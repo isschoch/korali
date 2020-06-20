@@ -2,54 +2,45 @@
 #include "modules/experiment/experiment.hpp"
 #include "modules/problem/bayesian/custom/custom.hpp"
 
-void korali::problem::bayesian::Custom::initialize()
+namespace korali
 {
-  korali::problem::Bayesian::initialize();
+namespace problem
+{
+namespace bayesian
+{
+void Custom::initialize()
+{
+  Bayesian::initialize();
 
-  if (_k->_variables.size() == 0) korali::Logger::logError("Bayesian inference problems require at least one variable.\n");
+  if (_k->_variables.size() == 0) KORALI_LOG_ERROR("Bayesian inference problems require at least one variable.\n");
 }
 
-void korali::problem::bayesian::Custom::evaluateLoglikelihood(korali::Sample &sample)
+void Custom::evaluateLoglikelihood(Sample &sample)
 {
   sample.run(_likelihoodModel);
 
-  try
-  {
-    if (!sample.contains("logLikelihood")) korali::Logger::logError("The specified likelihood model did not assign the value: 'logLikelihood' to the sample.\n");
-  }
-  catch (const std::exception &e)
-  {
-    korali::Logger::logError("Missing or incorrect value of 'logLikelihood' returned by the sample evaluation. \n   + Solution: Make sure your model is storing its logLikelihood value, e.g., sample[\"logLikelihood\"] = value(s).\n   + Cause: %s\n", e.what());
-  }
+  if (!sample.contains("logLikelihood")) KORALI_LOG_ERROR("The specified likelihood model did not assign the value: 'logLikelihood' to the sample.\n");
 }
 
-void korali::problem::bayesian::Custom::evaluateLoglikelihoodGradient(korali::Sample &sample)
+void Custom::evaluateLoglikelihoodGradient(Sample &sample)
 {
-  try
-  {
-    if (!sample.contains("logLikelihood Gradient")) korali::Logger::logError("The specified likelihood model did not assign the value: 'logLikelihood Gradient' to the sample.\n");
-    if (sample["loglikelihood Gradient"].size() != _k->_variables.size()) korali::Logger::logError("Bayesian problem of type Custom requires likelihood gradient of size %zu (provided size %zu)\n", _k->_variables.size(), sample["loglikelihood Gradient"].size());
-  }
-  catch (const std::exception &e)
-  {
-    korali::Logger::logError("Missing or incorrect value of 'logLikelihood Gradient' returned by the sample evaluation. \n   + Solution: Make sure your model is storing its logLikelihood Gradient value, e.g., sample[\"logLikelihood Gradient\"] = value(s).\n   + Cause: %s\n", e.what());
-  }
+  if (!sample.contains("logLikelihood Gradient")) KORALI_LOG_ERROR("The specified likelihood model did not assign the value: 'logLikelihood Gradient' to the sample.\n");
+  if (sample["loglikelihood Gradient"].size() != _k->_variables.size()) KORALI_LOG_ERROR("Bayesian problem of type Custom requires likelihood gradient of size %zu (provided size %zu)\n", _k->_variables.size(), sample["loglikelihood Gradient"].size());
 }
 
-void korali::problem::bayesian::Custom::evaluateFisherInformation(korali::Sample &sample)
+void Custom::evaluateFisherInformation(Sample &sample)
 {
-  try
-  {
-    if (!sample.contains("Fisher Information")) korali::Logger::logError("The specified likelihood model did not assign the value: 'Fisher Information' to the sample.\n");
+  if (!sample.contains("Fisher Information")) KORALI_LOG_ERROR("The specified likelihood model did not assign the value: 'Fisher Information' to the sample.\n");
 
-    size_t Nth = _k->_variables.size();
-    if (sample["Fisher Information"].size() != Nth) korali::Logger::logError("Bayesian problem of type Custom requires Fisher Information of size %zux%zu\n", Nth, Nth);
+  size_t Nth = _k->_variables.size();
+  if (sample["Fisher Information"].size() != Nth) KORALI_LOG_ERROR("Bayesian problem of type Custom requires Fisher Information of size %zux%zu\n", Nth, Nth);
 
-    for (size_t d = 0; d < Nth; ++d)
-      if (sample["Fisher Information"][d].size() != Nth) korali::Logger::logError("Bayesian problem of type Custom requires Fisher Information of size %zux%zu\n", Nth, Nth);
-  }
-  catch (const std::exception &e)
-  {
-    korali::Logger::logError("Missing or incorrect value of 'Fisher Information' returned by the sample evaluation. \n   + Solution: Make sure your model is storing its Fisher Information value, e.g., sample[\"Fisher Information\"] = value(s).\n   + Cause: %s\n", e.what());
-  }
+  for (size_t d = 0; d < Nth; ++d)
+    if (sample["Fisher Information"][d].size() != Nth) KORALI_LOG_ERROR("Bayesian problem of type Custom requires Fisher Information of size %zux%zu\n", Nth, Nth);
 }
+
+} // namespace bayesian
+
+} // namespace problem
+
+} // namespace korali

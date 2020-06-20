@@ -1,0 +1,6 @@
+*.log
+*.txt
+ply
+*.png
+*.DS_Store
+results/

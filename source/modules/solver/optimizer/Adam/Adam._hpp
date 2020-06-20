@@ -1,0 +1,26 @@
+#ifndef _KORALI_SOLVER_ADAM_HPP_
+#define _KORALI_SOLVER_ADAM_HPP_
+
+#include "modules/solver/optimizer/optimizer.hpp"
+
+namespace korali
+{
+namespace solver
+{
+namespace optimizer
+{
+class Adam : public Optimizer
+{
+  public:
+  void finalize() override;
+  void setInitialConfiguration() override;
+  void runGeneration() override;
+  void printGenerationBefore() override;
+  void printGenerationAfter() override;
+};
+
+} // namespace optimizer
+} // namespace solver
+} // namespace korali
+
+#endif // _KORALI_SOLVER_ADAM_HPP_

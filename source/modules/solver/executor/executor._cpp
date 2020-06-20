@@ -1,14 +1,18 @@
 #include "modules/conduit/conduit.hpp"
 #include "modules/solver/executor/executor.hpp"
 
-void korali::solver::Executor::runGeneration()
+namespace korali
+{
+namespace solver
+{
+void Executor::runGeneration()
 {
   _sampleCount = std::max(_k->_variables[0]->_precomputedValues.size(), _k->_variables[0]->_sampledValues.size());
 
   _maxModelEvaluations = std::min(_maxModelEvaluations, _sampleCount);
   _executionsPerGeneration = std::min(_executionsPerGeneration, _maxModelEvaluations - _modelEvaluationCount);
 
-  std::vector<korali::Sample> samples(_executionsPerGeneration);
+  std::vector<Sample> samples(_executionsPerGeneration);
   std::vector<double> sampleData(_k->_variables.size());
 
   for (size_t i = 0; i < _executionsPerGeneration; i++)
@@ -36,11 +40,15 @@ void korali::solver::Executor::runGeneration()
   _conduit->waitAll(samples);
 }
 
-void korali::solver::Executor::printGenerationBefore()
+void Executor::printGenerationBefore()
 {
 }
 
-void korali::solver::Executor::printGenerationAfter()
+void Executor::printGenerationAfter()
 {
   _k->_logger->logInfo("Minimal", "Total Executions %lu.\n", _modelEvaluationCount);
 }
+
+} // namespace solver
+
+} // namespace korali

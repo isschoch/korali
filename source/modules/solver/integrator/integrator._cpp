@@ -1,7 +1,11 @@
 #include "modules/conduit/conduit.hpp"
 #include "modules/solver/integrator/integrator.hpp"
 
-void korali::solver::Integrator::setInitialConfiguration()
+namespace korali
+{
+namespace solver
+{
+void Integrator::setInitialConfiguration()
 {
   _integral = 0;
   _sampleCount = 1;
@@ -21,13 +25,13 @@ void korali::solver::Integrator::setInitialConfiguration()
   }
 }
 
-void korali::solver::Integrator::runGeneration()
+void Integrator::runGeneration()
 {
   if (_k->_currentGeneration == 1) setInitialConfiguration();
 
   _executionsPerGeneration = std::min(_executionsPerGeneration, _maxModelEvaluations - _modelEvaluationCount);
 
-  std::vector<korali::Sample> samples(_executionsPerGeneration);
+  std::vector<Sample> samples(_executionsPerGeneration);
   std::vector<double> sampleData(_k->_variables.size());
   std::vector<std::vector<size_t>> usedIndices(_executionsPerGeneration, std::vector<size_t>(_k->_variables.size()));
 
@@ -69,39 +73,34 @@ void korali::solver::Integrator::runGeneration()
   }
   _conduit->waitAll(samples);
 
-  double weight, f;
+  double weight;
   for (size_t i = 0; i < _executionsPerGeneration; i++)
   {
-    weight = 1;
+    weight = 1.0;
     for (size_t d = 0; d < _k->_variables.size(); d++)
-    {
       weight *= _k->_variables[d]->_quadratureWeights[usedIndices[i][d]];
-    }
 
-    try
-    {
-      f = samples[i]["Evaluation"];
-    }
-    catch (const std::exception &e)
-    {
-      korali::Logger::logError("Integrator: Missing or incorrect value of 'Evaluation' returned by the sample evaluation. \n   + Solution: Make sure your model is storing its result, e.g., sample[\"Evaluation\"] = value.\n   + Cause: %s\n", e.what());
-    }
+    auto f = KORALI_GET(double, samples[i], "Evaluation");
 
     _integral += weight * f;
   }
   (*_k)["Results"]["Integral"] = _integral;
 }
 
-void korali::solver::Integrator::printGenerationBefore()
+void Integrator::printGenerationBefore()
 {
 }
 
-void korali::solver::Integrator::printGenerationAfter()
+void Integrator::printGenerationAfter()
 {
   _k->_logger->logInfo("Minimal", "Total Terms summed %lu/%lu.\n", _modelEvaluationCount, _sampleCount);
 }
 
-void korali::solver::Integrator::finalize()
+void Integrator::finalize()
 {
   _k->_logger->logInfo("Minimal", "Integral Calculated: %e\n", _integral);
 }
+
+} // namespace solver
+
+} // namespace korali

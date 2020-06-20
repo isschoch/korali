@@ -1,26 +1,38 @@
 #include "modules/distribution/univariate/gamma/gamma.hpp"
 #include "modules/experiment/experiment.hpp"
 
-double korali::distribution::univariate::Gamma::getDensity(double x)
+namespace korali
+{
+namespace distribution
+{
+namespace univariate
+{
+double Gamma::getDensity(const double x) const
 {
   return gsl_ran_gamma_pdf(x, _shape, _scale);
 }
 
-double korali::distribution::univariate::Gamma::getLogDensity(double x)
+double Gamma::getLogDensity(const double x) const
 {
   if (x < 0) return -INFINITY;
   return _aux + (_shape - 1) * log(x) - x / _scale;
 }
 
-double korali::distribution::univariate::Gamma::getRandomNumber()
+double Gamma::getRandomNumber()
 {
   return gsl_ran_gamma(_range, _shape, _scale);
 }
 
-void korali::distribution::univariate::Gamma::updateDistribution()
+void Gamma::updateDistribution()
 {
-  if (_shape <= 0.0) korali::Logger::logError("Incorrect Shape parameter of Gamma distribution: %f.\n", _shape);
-  if (_scale <= 0.0) korali::Logger::logError("Incorrect Scale parameter of Gamma distribution: %f.\n", _scale);
+  if (_shape <= 0.0) KORALI_LOG_ERROR("Incorrect Shape parameter of Gamma distribution: %f.\n", _shape);
+  if (_scale <= 0.0) KORALI_LOG_ERROR("Incorrect Scale parameter of Gamma distribution: %f.\n", _scale);
 
   _aux = -gsl_sf_lngamma(_shape) - _shape * log(_scale);
 }
+
+} // namespace univariate
+
+} // namespace distribution
+
+} // namespace korali

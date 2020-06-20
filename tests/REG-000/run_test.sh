@@ -6,17 +6,17 @@ source ../functions.sh
 
 ############# STEP 1 ##############
 
-logEcho "[Korali] Checking Pip Installation"
+echo "[Korali] Checking Pip Installation"
 python3 -m pip check korali
 check_result
 
 ############# STEP 2 ##############
 
-logEcho "[Korali] Checking korali.plotter"
+echo "[Korali] Checking korali.plotter"
 python3 -m korali.plotter --check
 check_result
 
-logEcho "[Korali] Checking korali.cxx"
+echo "[Korali] Checking korali.cxx"
 python3 -m korali.cxx --cflags
 check_result
 

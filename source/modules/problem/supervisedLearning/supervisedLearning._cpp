@@ -1,9 +1,12 @@
 #include "modules/problem/supervisedLearning/supervisedLearning.hpp"
 
-void korali::problem::SupervisedLearning::initialize()
+namespace korali
+{
+namespace problem
+{
+void SupervisedLearning::initialize()
 {
   // Processing output/input variable configuration
-
   _outputVectorIndexes.clear();
   _inputVectorIndexes.clear();
 
@@ -16,17 +19,21 @@ void korali::problem::SupervisedLearning::initialize()
   _inputVectorSize = _inputVectorIndexes.size();
   _outputVectorSize = _outputVectorIndexes.size();
 
-  if (_inputVectorSize == 0) korali::Logger::logError("No input variables have been defined.\n");
-  if (_outputVectorSize == 0) korali::Logger::logError("No output variables have been defined.\n");
+  if (_inputVectorSize == 0) KORALI_LOG_ERROR("No input variables have been defined.\n");
+  if (_outputVectorSize == 0) KORALI_LOG_ERROR("No output variables have been defined.\n");
 
   // Checking training/validation inputs
   _trainingBatchSize = _k->_variables[0]->_trainingData.size();
   for (size_t i = 1; i < _k->_variables.size(); i++)
     if (_k->_variables[i]->_trainingData.size() != _trainingBatchSize)
-      korali::Logger::logError("Variable %lu has a different training set vector size (%lu) than that of variable 0 (%lu).\n", _k->_variables[i]->_trainingData.size(), _trainingBatchSize);
+      KORALI_LOG_ERROR("Variable %lu has a different training set vector size (%lu) than that of variable 0 (%lu).\n", _k->_variables[i]->_trainingData.size(), _trainingBatchSize);
 
   _validationBatchSize = _k->_variables[0]->_validationData.size();
   for (size_t i = 1; i < _k->_variables.size(); i++)
     if (_k->_variables[i]->_validationData.size() != _validationBatchSize)
-      korali::Logger::logError("Variable %lu has a different validation set vector size (%lu) than that of variable 0 (%lu).\n", _k->_variables[i]->_validationData.size(), _validationBatchSize);
+      KORALI_LOG_ERROR("Variable %lu has a different validation set vector size (%lu) than that of variable 0 (%lu).\n", _k->_variables[i]->_validationData.size(), _validationBatchSize);
 }
+
+} // namespace problem
+
+} // namespace korali

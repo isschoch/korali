@@ -1,0 +1,562 @@
+#include "modules/conduit/conduit.hpp"
+#include "modules/distribution/univariate/uniform/uniform.hpp"
+#include "modules/experiment/experiment.hpp"
+#include "modules/solver/sampler/Nested/Nested.hpp"
+
+#include <gsl/gsl_linalg.h>
+#include <gsl/gsl_matrix.h>
+#include <gsl/gsl_randist.h>
+#include <gsl/gsl_vector.h>
+
+#include <algorithm> //sort
+#include <chrono>
+#include <limits>
+#include <math.h> //isfinite
+#include <numeric>
+#include <random> // std::default_random_engine
+
+namespace korali
+{
+namespace solver
+{
+namespace sampler
+{
+void Nested::setInitialConfiguration()
+{
+  _shuffleSeed = _k->_randomSeed++;
+
+  if (_covarianceScaling <= 0.0) KORALI_LOG_ERROR("Covariance Scaling must be larger 0.0 (is %lf).\n", _covarianceScaling);
+  if (_maxGainFactor < 0.0) KORALI_LOG_ERROR("Max Gain Factor must be larger equal 0.0 (is %lf).\n", _maxGainFactor);
+
+  if ((_resamplingMethod != "MCMC") && (_resamplingMethod != "Box") && (_resamplingMethod != "Ellipse")) KORALI_LOG_ERROR("Only accepted Resampling Method are 'MCMC', 'Box' and 'Ellipse' (is %s).\n", _resamplingMethod.c_str());
+
+  if (_proposalUpdateFrequency == 0) KORALI_LOG_ERROR("Proposal Update Frequency must be larger 0");
+
+  _priorLowerBound.resize(_k->_variables.size());
+  _priorWidth.resize(_k->_variables.size());
+
+  for (size_t d = 0; d < _k->_variables.size(); ++d)
+  {
+    if (_k->_distributions[_k->_variables[d]->_distributionIndex]->_type != "Univariate/Uniform") KORALI_LOG_ERROR("Only 'Univariate/Uniform' priors allowed (is %s).\n", _k->_distributions[_k->_variables[d]->_distributionIndex]->_type.c_str());
+    _priorWidth[d] = dynamic_cast<distribution::univariate::Uniform *>(_k->_distributions[_k->_variables[d]->_distributionIndex])->_maximum - dynamic_cast<distribution::univariate::Uniform *>(_k->_distributions[_k->_variables[d]->_distributionIndex])->_minimum;
+    _priorLowerBound[d] = dynamic_cast<distribution::univariate::Uniform *>(_k->_distributions[_k->_variables[d]->_distributionIndex])->_minimum;
+  }
+
+  if ((_resamplingMethod == "Ellipse") && (_k->_variables.size() == 2)) KORALI_LOG_ERROR("Resampling Method Ellipse only suitable for problems of dim larger 2.");
+
+  _candidateLogLikelihoods.resize(_batchSize);
+  _candidateLogPriors.resize(_batchSize);
+  _candidates.resize(_batchSize);
+  for (size_t i = 0; i < _batchSize; i++) _candidates[i].resize(_k->_variables.size());
+
+  _liveLogLikelihoods.resize(_numberLivePoints);
+  _liveLogPriors.resize(_numberLivePoints);
+  _liveSamplesRank.resize(_numberLivePoints);
+  _liveSamples.resize(_numberLivePoints);
+  for (size_t i = 0; i < _numberLivePoints; i++) _liveSamples[i].resize(_k->_variables.size());
+
+  _databaseEntries = 0;
+  _sampleLogLikelihoodDatabase.resize(0);
+  _sampleLogPriorDatabase.resize(0);
+  _sampleLogWeightDatabase.resize(0);
+  _sampleDatabase.resize(0);
+
+  _domainMean.resize(_k->_variables.size());
+  if (_resamplingMethod == "MCMC") _covarianceMatrix.resize(_k->_variables.size() * _k->_variables.size());
+  if (_resamplingMethod == "Box")
+  {
+    _boxLowerBound.resize(_k->_variables.size());
+    _boxUpperBound.resize(_k->_variables.size());
+  }
+  if (_resamplingMethod == "Ellipse")
+  {
+    _ellipseAxes.resize(_k->_variables.size());
+    for (size_t i = 0; i < _k->_variables.size(); i++) _ellipseAxes[i].resize(_k->_variables.size());
+  }
+
+  // Init Generation
+  _logEvidence = std::numeric_limits<double>::lowest();
+  _expectedLogShrinkage = log((_numberLivePoints + 1.) / _numberLivePoints);
+  _logVolume = 0.;
+  _logEvidenceVar = 0.;
+  _information = 0.;
+  _lastAccepted = 0;
+  _acceptedSamples = 0;
+  _generatedSamples = 0;
+  _lStarOld = std::numeric_limits<double>::lowest();
+  _lStar = std::numeric_limits<double>::lowest();
+}
+
+void Nested::runGeneration()
+{
+  if (_k->_currentGeneration == 1)
+  {
+    setInitialConfiguration();
+    runFirstGeneration();
+    return;
+  };
+
+  // Generation > 1
+  prepareGeneration();
+  std::vector<Sample> samples(_batchSize);
+
+  for (size_t c = 0; c < _batchSize; c++)
+  {
+    samples[c]["Module"] = "Problem";
+    samples[c]["Operation"] = "Evaluate";
+    samples[c]["Parameters"] = _candidates[c];
+    samples[c]["Sample Id"] = c;
+    _conduit->start(samples[c]);
+    _modelEvaluationCount++;
+    _generatedSamples++;
+  }
+
+  size_t finishedCandidatesCount = 0;
+  while (finishedCandidatesCount < _batchSize)
+  {
+    size_t finishedId = _conduit->waitAny(samples);
+
+    _candidateLogLikelihoods[finishedId] = KORALI_GET(double, samples[finishedId], "logLikelihood");
+    _candidateLogPriors[finishedId] = KORALI_GET(double, samples[finishedId], "logPrior");
+
+    finishedCandidatesCount++;
+  }
+
+  processGeneration();
+
+  return;
+}
+
+void Nested::runFirstGeneration()
+{
+  for (size_t i = 0; i < _numberLivePoints; i++)
+    for (size_t d = 0; d < _k->_variables.size(); d++)
+      _liveSamples[i][d] = _k->_distributions[_k->_variables[d]->_distributionIndex]->getRandomNumber();
+
+  std::vector<Sample> samples(_numberLivePoints);
+
+  for (size_t c = 0; c < _numberLivePoints; c++)
+  {
+    samples[c]["Module"] = "Problem";
+    samples[c]["Operation"] = "Evaluate";
+    samples[c]["Parameters"] = _liveSamples[c];
+    samples[c]["Sample Id"] = c;
+    _conduit->start(samples[c]);
+    _modelEvaluationCount++;
+    _generatedSamples++;
+  }
+
+  size_t finishedCandidatesCount = 0;
+  while (finishedCandidatesCount < _numberLivePoints)
+  {
+    size_t finishedId = _conduit->waitAny(samples);
+
+    _liveLogLikelihoods[finishedId] = KORALI_GET(double, samples[finishedId], "logLikelihood");
+    _liveLogPriors[finishedId] = KORALI_GET(double, samples[finishedId], "logPrior");
+
+    finishedCandidatesCount++;
+  }
+
+  sortLiveSamplesAscending();
+
+  if (isfinite(_liveLogLikelihoods[_liveSamplesRank[0]])) _lStar = _liveLogLikelihoods[_liveSamplesRank[0]];
+  _maxEvaluation = _liveLogLikelihoods[_liveSamplesRank[_numberLivePoints - 1]];
+
+  return;
+}
+
+void Nested::prepareGeneration()
+{
+  if (_k->_currentGeneration > 3 && _k->_currentGeneration % _proposalUpdateFrequency != 0) return;
+
+  if (_resamplingMethod == "MCMC")
+  {
+    updateMeanAndCovariance();
+    generateCandidatesFromMCMC();
+  }
+  else if (_resamplingMethod == "Box")
+  {
+    updateBox();
+    generateCandidatesFromBox();
+  }
+  else /* (_resamplingMethod == "Ellipse") */
+  {
+    updateEllipse();
+    generateCandidatesFromEllipse();
+  }
+
+  return;
+}
+
+void Nested::processGeneration()
+{
+  size_t sampleIdx = _liveSamplesRank[0];
+  size_t acceptedBefore = _acceptedSamples;
+  for (size_t c = 0; c < _batchSize; ++c)
+  {
+    if (_candidateLogLikelihoods[c] < _lStar) continue;
+    _acceptedSamples++;
+
+    // update evidence & domain
+    double logVolumeOld = _logVolume;
+    double informationOld = _information;
+    double logEvidenceOld = _logEvidence;
+
+    _logVolume -= _expectedLogShrinkage;
+
+    double dLogVol = log(0.5 * exp(logVolumeOld) - 0.5 * exp(_logVolume));
+    _logWeight = safeLogPlus(_lStar, _lStarOld) + dLogVol;
+    _logEvidence = safeLogPlus(_logEvidence, _logWeight);
+
+    double evidenceTerm = exp(_lStarOld - _logEvidence) * _lStarOld + exp(_lStar - _logEvidence) * _lStar;
+
+    _information = exp(dLogVol) * evidenceTerm + exp(logEvidenceOld - _logEvidence) * (informationOld + logEvidenceOld) - _logEvidence;
+    _logEvidenceVar += 2. * (_information - informationOld) * _expectedLogShrinkage;
+    //printf("%lf | %lf (%lf) | %lf\n",evidenceTerm, _information, informationOld, _logEvidenceVar);
+
+    // add it to db
+    if (isfinite(_liveLogLikelihoods[sampleIdx])) updateSampleDatabase(sampleIdx);
+
+    // replace worst sample
+    _liveSamples[sampleIdx] = _candidates[c];
+    _liveLogPriors[sampleIdx] = _candidateLogPriors[c];
+    _liveLogLikelihoods[sampleIdx] = _candidateLogLikelihoods[c];
+
+    // sort rank vector and update constraint
+    sortLiveSamplesAscending();
+
+    // select new worst sample
+    sampleIdx = _liveSamplesRank[0];
+
+    _lStarOld = _lStar;
+    if (isfinite(_liveLogLikelihoods[sampleIdx])) _lStar = _liveLogLikelihoods[sampleIdx];
+  }
+
+  _maxEvaluation = _liveLogLikelihoods[_liveSamplesRank[_numberLivePoints - 1]];
+  _effectiveSampleSize = calcEffectiveSamples();
+
+  if (acceptedBefore == _acceptedSamples)
+    _lastAccepted++;
+  else
+    _lastAccepted = 1;
+
+  return;
+}
+
+void Nested::generateCandidatesFromMCMC()
+{
+  std::vector<double> zeroMean(_k->_variables.size(), 0.0);
+  _multivariateGenerator->_meanVector = zeroMean;
+  _multivariateGenerator->_sigma = _covarianceMatrix;
+
+  /* Cholesky Decomp */
+  gsl_matrix_view sigma = gsl_matrix_view_array(&_multivariateGenerator->_sigma[0], _k->_variables.size(), _k->_variables.size());
+  gsl_linalg_cholesky_decomp(&sigma.matrix);
+
+  _multivariateGenerator->updateDistribution();
+
+  for (size_t i = 0; i < _batchSize; i++)
+  {
+    _multivariateGenerator->getRandomVector(&_candidates[i][0], _k->_variables.size());
+
+    size_t cpyIdx = (size_t)(_uniformGenerator->getRandomNumber() * _numberLivePoints);
+    for (size_t d = 0; d < _k->_variables.size(); ++d) _candidates[i][d] = _candidates[i][d] * _priorWidth[d] + _liveSamples[cpyIdx][d];
+  }
+}
+
+void Nested::generateCandidatesFromBox()
+{
+  for (size_t i = 0; i < _batchSize; i++)
+  {
+    for (size_t d = 0; d < _k->_variables.size(); ++d)
+      _candidates[i][d] = _boxLowerBound[d] + _uniformGenerator->getRandomNumber() * (_boxUpperBound[d] - _boxLowerBound[d]);
+  }
+}
+
+void Nested::generateCandidatesFromEllipse()
+{
+  std::vector<double> vec(_k->_variables.size());
+  for (size_t i = 0; i < _batchSize; i++)
+  {
+    double len = 0;
+    for (size_t d = 0; d < _k->_variables.size(); ++d)
+    {
+      vec[d] = _normalGenerator->getRandomNumber();
+      len += vec[d] * vec[d];
+    }
+    double dim = _k->_variables.size();
+    for (size_t d = 0; d < _k->_variables.size(); ++d)
+      vec[d] *= pow(_uniformGenerator->getRandomNumber(), 1. / dim) / sqrt(len);
+
+    for (size_t k = 0; k < _k->_variables.size(); ++k)
+    {
+      _candidates[i][k] = _domainMean[k];
+      //for(size_t l = k; l < _k->_variables.size(); ++l){
+      for (size_t l = 0; l < k + 1; ++l)
+      {
+        _candidates[i][k] += _ellipsoidalScaling * _ellipseAxes[k][l] * vec[l];
+      }
+      _candidates[i][k] *= _priorWidth[k];
+      _candidates[i][k] += _priorLowerBound[k];
+    }
+  }
+}
+
+void Nested::updateMeanAndCovariance()
+{
+  for (size_t d = 0; d < _k->_variables.size(); d++) _domainMean[d] = 0.0;
+
+  double weight1 = 1. / ((double)_numberLivePoints);
+  for (size_t i = 0; i < _numberLivePoints; i++)
+    for (size_t d = 0; d < _k->_variables.size(); d++)
+      _domainMean[d] += weight1 * _liveSamples[i][d];
+
+  double weight2 = 1. / ((double)_numberLivePoints - 1.);
+  for (size_t i = 0; i < _k->_variables.size(); i++)
+  {
+    for (size_t j = i; j < _k->_variables.size(); ++j)
+    {
+      double s = 0.;
+      for (size_t k = 0; k < _numberLivePoints; ++k) s += (_liveSamples[k][i] - _domainMean[i]) * (_liveSamples[k][j] - _domainMean[j]);
+      _covarianceMatrix[i * _k->_variables.size() + j] = _covarianceMatrix[j * _k->_variables.size() + i] = _covarianceScaling * weight2 * s / (_priorWidth[i] * _priorWidth[j]);
+    }
+  }
+}
+
+void Nested::updateBox()
+{
+  for (size_t d = 0; d < _k->_variables.size(); d++) _boxLowerBound[d] = std::numeric_limits<double>::max();
+  for (size_t d = 0; d < _k->_variables.size(); d++) _boxUpperBound[d] = std::numeric_limits<double>::lowest();
+
+  for (size_t i = 0; i < _numberLivePoints; i++)
+    for (size_t d = 0; d < _k->_variables.size(); d++)
+    {
+      _boxLowerBound[d] = std::min(_boxLowerBound[d], _liveSamples[i][d]);
+      _boxUpperBound[d] = std::max(_boxUpperBound[d], _liveSamples[i][d]);
+    }
+}
+
+void Nested::updateEllipse()
+{
+  for (size_t d = 0; d < _k->_variables.size(); d++) _domainMean[d] = 0.0;
+
+  gsl_matrix *cvlup = gsl_matrix_calloc(_k->_variables.size(), _k->_variables.size());
+  gsl_matrix *covar = gsl_matrix_calloc(_k->_variables.size(), _k->_variables.size());
+
+  double weight1 = 1. / ((double)_numberLivePoints);
+  for (size_t i = 0; i < _numberLivePoints; i++)
+    for (size_t d = 0; d < _k->_variables.size(); d++)
+      _domainMean[d] += weight1 * _liveSamples[i][d];
+  for (size_t d = 0; d < _k->_variables.size(); d++)
+    _domainMean[d] = (_domainMean[d] - _priorLowerBound[d]) / _priorWidth[d];
+
+  double weight2 = 1. / ((double)_numberLivePoints - 1.);
+  for (size_t i = 0; i < _k->_variables.size(); i++)
+  {
+    for (size_t j = i; j < _k->_variables.size(); ++j)
+    {
+      double s = 0.0;
+      for (size_t k = 0; k < _numberLivePoints; ++k) s += ((_liveSamples[k][i] - _priorLowerBound[i]) / _priorWidth[i] - _domainMean[i]) * ((_liveSamples[k][j] - _priorLowerBound[j]) / _priorWidth[j] - _domainMean[j]);
+      gsl_matrix_set(cvlup, i, j, weight2 * s);
+      gsl_matrix_set(cvlup, j, i, weight2 * s);
+      gsl_matrix_set(covar, i, j, weight2 * s);
+      gsl_matrix_set(covar, j, i, weight2 * s);
+    }
+  }
+
+  gsl_permutation *p = gsl_permutation_alloc(_k->_variables.size());
+  int s;
+  int status1 = gsl_linalg_LU_decomp(cvlup, p, &s);
+
+  gsl_matrix *inv = gsl_matrix_alloc(_k->_variables.size(), _k->_variables.size());
+  int status2 = gsl_linalg_LU_invert(cvlup, p, inv);
+
+  if ((status1 != 0) or (status2 != 0)) gsl_matrix_set_identity(inv);
+
+  gsl_vector *vec = gsl_vector_calloc(_k->_variables.size());
+  gsl_vector *vout = gsl_vector_calloc(_k->_variables.size());
+  double res, max = std::numeric_limits<double>::lowest();
+  for (size_t i = 0; i < _numberLivePoints; ++i)
+  {
+    for (size_t d = 0; d < _k->_variables.size(); ++d)
+      gsl_vector_set(vec, d, (_liveSamples[i][d] - _priorLowerBound[d]) / _priorWidth[d] - _domainMean[d]);
+
+    gsl_blas_dgemv(CblasNoTrans, 1., inv, vec, 0., vout);
+    res = 0.;
+    gsl_blas_ddot(vec, vout, &res);
+
+    if (res > max) max = res;
+  }
+
+  gsl_matrix_scale(covar, max);
+  int status3 = gsl_linalg_cholesky_decomp1(covar); // LL^T = A
+  if (status3 == 1) KORALI_LOG_ERROR("Cholesky Decomposition failed during Ellipse update.");
+  /* On output the diagonal and lower triangular part of the 
+     * input matrix A contain the matrix L, while the upper triangular part 
+     * contains the original matrix. */
+
+  for (size_t k = 0; k < _k->_variables.size(); k++)
+    for (size_t l = 0; l < _k->_variables.size(); l++)
+      _ellipseAxes[k][l] = gsl_matrix_get(covar, k, l);
+
+  gsl_vector_free(vec);
+  gsl_vector_free(vout);
+  gsl_matrix_free(inv);
+  gsl_permutation_free(p);
+  gsl_matrix_free(cvlup);
+  gsl_matrix_free(covar);
+}
+
+void Nested::sortLiveSamplesAscending()
+{
+  //TODO: speed up
+  std::iota(_liveSamplesRank.begin(), _liveSamplesRank.end(), 0);
+  stable_sort(_liveSamplesRank.begin(), _liveSamplesRank.end(), [this](const size_t &idx1, const size_t &idx2) -> bool { return this->_liveLogLikelihoods[idx1] < this->_liveLogLikelihoods[idx2]; });
+}
+
+void Nested::updateSampleDatabase(size_t sampleIdx)
+{
+  _databaseEntries++;
+  _sampleDatabase.push_back(_liveSamples[sampleIdx]);
+  _sampleLogPriorDatabase.push_back(_liveLogPriors[sampleIdx]);
+  _sampleLogLikelihoodDatabase.push_back(_liveLogLikelihoods[sampleIdx]);
+  _sampleLogWeightDatabase.push_back(_logWeight);
+}
+
+void Nested::consumeLiveSamples()
+{
+  size_t sampleIdx;
+  double dLogVol, logEvidenceOld, informationOld, evidenceTerm;
+
+  std::vector<double> logvols(_numberLivePoints + 1, _logVolume);
+  std::vector<double> logdvols(_numberLivePoints);
+  std::vector<double> dlvs(_numberLivePoints);
+
+  for (size_t i = 0; i < _numberLivePoints; ++i)
+  {
+    logvols[i + 1] += log(1. - (i + 1.) / (_numberLivePoints + 1.));
+    logdvols[i] = safeLogMinus(logvols[i], logvols[i + 1]);
+    dlvs[i] = logvols[i] - logvols[i + 1];
+  }
+  for (size_t i = 0; i < _numberLivePoints + 1; ++i) logdvols[i] += log(0.5);
+
+  for (size_t i = 0; i < _numberLivePoints; ++i)
+  {
+    sampleIdx = _liveSamplesRank[i];
+
+    logEvidenceOld = _logEvidence;
+    informationOld = _information;
+
+    _lStarOld = _lStar;
+    if (isfinite(_liveLogLikelihoods[sampleIdx])) _lStar = _liveLogLikelihoods[sampleIdx];
+    dLogVol = logdvols[i];
+
+    _logVolume = safeLogMinus(_logVolume, dLogVol);
+    _logWeight = safeLogPlus(_lStar, _lStarOld) + dLogVol;
+    _logEvidence = safeLogPlus(_logEvidence, _logWeight);
+
+    evidenceTerm = exp(_lStarOld - _logEvidence) * _lStarOld + exp(_lStar - _logEvidence) * _lStar;
+
+    _information = exp(dLogVol) * evidenceTerm + exp(logEvidenceOld - _logEvidence) * (informationOld + logEvidenceOld) - _logEvidence;
+
+    _logEvidenceVar += 2. * (_information - informationOld) * dlvs[i];
+
+    updateSampleDatabase(sampleIdx);
+  }
+
+  _effectiveSampleSize = calcEffectiveSamples();
+}
+
+void Nested::generatePosterior()
+{
+  double maxLogWtDb = *max_element(std::begin(_sampleLogWeightDatabase), std::end(_sampleLogWeightDatabase));
+
+  std::vector<size_t> permutation(_databaseEntries);
+  std::iota(std::begin(permutation), std::end(permutation), 0);
+  std::shuffle(permutation.begin(), permutation.end(), std::default_random_engine(_shuffleSeed));
+
+  size_t rndIdx;
+  _posteriorSamples.clear();
+
+  double k = 1.0;
+  double sum = _uniformGenerator->getRandomNumber();
+  for (size_t i = 0; i < _databaseEntries; ++i)
+  {
+    rndIdx = permutation[i];
+    sum += exp(_sampleLogWeightDatabase[rndIdx] - maxLogWtDb);
+    if (sum > k)
+    {
+      _posteriorSamples.push_back(_sampleDatabase[rndIdx]);
+      k++;
+    }
+  }
+  return;
+}
+
+double Nested::calcEffectiveSamples() const
+{
+  if (_databaseEntries < 1) return 0.0;
+
+  double wtsum = std::numeric_limits<double>::lowest();
+  double wt2sum = std::numeric_limits<double>::lowest();
+
+  for (size_t i = 0; i < _databaseEntries; ++i)
+  {
+    wtsum = safeLogPlus(wtsum, _sampleLogWeightDatabase[i]);
+    wt2sum = safeLogPlus(wt2sum, 2.0 * _sampleLogWeightDatabase[i]);
+  }
+
+  return exp(2.0 * wtsum - wt2sum);
+}
+
+double Nested::safeLogPlus(double logx, double logy) const
+{
+  if (logx > logy)
+    return logx + log1p(exp(logy - logx));
+  else
+    return logy + log1p(exp(logx - logy));
+}
+
+double Nested::safeLogMinus(double logx, double logy) const
+{
+  return log(exp(logx - logy) - 1) + logy;
+}
+
+void Nested::printGenerationBefore() { return; }
+
+void Nested::printGenerationAfter()
+{
+  _k->_logger->logInfo("Minimal", "Log Evidence: %.4f (+- %.4f)\n", _logEvidence, sqrt(_logEvidenceVar));
+  _k->_logger->logInfo("Minimal", "Accepted Samples: %zu (+%zu) \n", _acceptedSamples, _numberLivePoints);
+  _k->_logger->logInfo("Minimal", "Effective Sample Size: %.2f\n", _effectiveSampleSize);
+  _k->_logger->logInfo("Minimal", "Sampling Efficiency: %.2f%%\n", 100.0 * (_acceptedSamples + _numberLivePoints) / ((double)_generatedSamples));
+  _k->_logger->logInfo("Detailed", "Log Volume (shrinkage): %.4f (%.2f%%)\n", _logVolume, 100. * (1. - exp(_logVolume)));
+  _k->_logger->logInfo("Detailed", "lStar: %.2f\n", _lStar);
+  _k->_logger->logInfo("Detailed", "Estimated maximal remaining log evidence: %.2f (max evaluation: %.2f)\n", _maxEvaluation + _logVolume, _maxEvaluation);
+  _k->_logger->logInfo("Detailed", "Last Accepted: %zu\n", _lastAccepted);
+  _k->_logger->logInfo("Detailed", "Information: %.4f\n", _information);
+  return;
+}
+
+void Nested::finalize()
+{
+  if (_k->_currentGeneration <= 1) return;
+  if (_addLivePoints == true) consumeLiveSamples();
+
+  generatePosterior();
+  (*_k)["Results"]["Posterior Samples"] = _posteriorSamples;
+  (*_k)["Results"]["Sample Database"] = _sampleDatabase;
+
+  _k->_logger->logInfo("Minimal", "Final Log Evidence: %.4f (+- %.4F)\n", _logEvidence, sqrt(_logEvidenceVar));
+  _k->_logger->logInfo("Minimal", "Max evaluation: %.2f\n", _maxEvaluation);
+  _k->_logger->logInfo("Minimal", "Information: %.4f\n", _information);
+  _k->_logger->logInfo("Minimal", "Posterior Samples: %zu\n", _posteriorSamples.size());
+  _k->_logger->logInfo("Minimal", "Sampling Efficiency: %.2f%%\n", 100.0 * (_acceptedSamples + _numberLivePoints) / ((double)_generatedSamples));
+  return;
+}
+
+} // namespace sampler
+
+} // namespace solver
+
+} // namespace korali

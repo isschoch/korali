@@ -26,14 +26,14 @@ class Normal : public korali::distribution::Univariate
  * @param x point to evaluate P(x)
  * @return Value of the probability density.
  */
-  double getDensity(double x) override;
+  double getDensity(const double x) const override;
 
   /**
  * @brief Gets the Log probability density of the distribution at point x.
  * @param x point to evaluate log(P(x))
  * @return Log of probability density.
  */
-  double getLogDensity(double x) override;
+  double getLogDensity(const double x) const override;
 
   /**
   * @brief Draws and returns a random number from the distribution.
