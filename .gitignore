@@ -42,3 +42,7 @@ __pycache__
 *.settings/ 
 *.d
 
+## -- added by Isidor:
+prereqs/
+Korali.egg-info/
+dist/
