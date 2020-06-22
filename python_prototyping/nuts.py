@@ -8,7 +8,7 @@ from statistics import *
 from leapfrog import *
 from test_hamiltonian_mcmc import *
 
-def nuts():
+def nuts(num_samples, U, grad_U, q_init=None, dim=None, metric=None, euclidean_metric=True, num_warmup_samples=2000, warmup_quotient=0.7, integration_time=1.0, delta=0.65):
     if metric is None:
         metric = np.identity(dim, dtype=float)
     metric_inv = np.linalg.inv(metric)
@@ -22,6 +22,9 @@ def nuts():
     def H(q, p):
         return U(q) + K(p)
 
+    step_size = find_reasonable_step_size(q_init, U, grad_U, K, grad_K)
+    step_size_bar = 1.0
+
     # set parameters for adaptation of step_size
     mu = np.log(10.0 * step_size)
     H_bar = 0.0
@@ -30,11 +33,98 @@ def nuts():
     t_0 = 10.0
     kappa = 0.75
 
-    step_size = find_reasonable_step_size(q_init, U, grad_U, K, grad_K)
-
-    for m in range(num_samples):
+    warmup_samples = np.zeros(shape=(num_warmup_samples, dim), dtype=float)
+    warmup_samples[0, :] = q_init
+    for m in range(1, num_warmup_samples):
         p_0 = draw_momentum(metric)
+        
+        u = np.random.uniform(0.0, np.exp(-H(warmup_samples[m-1, :], p_0)))
+        
+        q_minus = warmup_samples[m-1, :]
+        q_plus = warmup_samples[m-1, :]
+        p_minus = p_0
+        p_plus = p_0
+        j = 0
+        warmup_samples[m, :] = warmup_samples[m-1, :]
+        n = 1
+        s = 1
+        step_size_old = step_size
 
+        while s == 1:
+            v = 2. * (np.random.randint(0, 2) - 0.5)
+
+            if v == -1:
+                q_minus, p_minus, _, _, q_prime, n_prime, s_prime, alpha, n_alpha = build_tree(q_minus, p_minus, u, v, j, step_size_old, warmup_samples[m-1, :], p_0, U, grad_U, K, grad_K)
+            elif v == 1:
+                _, _, q_plus, p_plus, q_prime, n_prime, s_prime, alpha, n_alpha = build_tree(q_plus, p_plus, u, v, j, step_size_old, warmup_samples[m-1, :], p_0, U, grad_U, K, grad_K)
+            else:
+                print("ERROR: v is neither -1 nor 1")
+            
+            if s_prime == 1:
+                accept_probability = min(1.0, n_prime / n)
+                if np.random.uniform() <= accept_probability:
+                    warmup_samples[m, :] = q_prime
+
+            n = n + n_prime
+            
+            if np.dot(q_plus - q_minus, p_minus) >= 0 and np.dot(q_plus - q_minus, p_plus) >= 0:
+                s = s_prime
+            else:
+                s = 0
+            
+            j = j + 1
+
+        H_bar = (1.0 - 1.0 / (m + 1 + t_0)) * H_bar + (delta - alpha) / (m + 1 + t_0)
+        step_size = np.exp((mu - np.sqrt(m + 1) / gamma * H_bar))
+        step_size_bar = step_size_bar * (step_size / step_size_bar) ** ((m+1) ** (-kappa))
+        
+
+    step_size = step_size_bar
+
+    samples = np.zeros(shape=(num_samples, dim), dtype=float)
+    samples[0, :] = warmup_samples[num_warmup_samples - 1, :]
+    for m in range(1, num_samples):
+        p_0 = draw_momentum(metric)
+        
+        u = np.random.uniform(0.0, np.exp(-H(samples[m-1, :], p_0)))
+        
+        q_minus = samples[m-1, :]
+        q_plus = samples[m-1, :]
+        p_minus = p_0
+        p_plus = p_0
+        j = 0
+        samples[m, :] = samples[m-1, :]
+        n = 1
+        s = 1
+        step_size_old = step_size
+
+        while s == 1:
+            v = 2. * (np.random.randint(0, 2) - 0.5)
+
+            if v == -1:
+                q_minus, p_minus, _, _, q_prime, n_prime, s_prime, alpha, n_alpha = build_tree(q_minus, p_minus, u, v, j, step_size_old, samples[m-1, :], p_0, U, grad_U, K, grad_K)
+            elif v == 1:
+                _, _, q_plus, p_plus, q_prime, n_prime, s_prime, alpha, n_alpha = build_tree(q_plus, p_plus, u, v, j, step_size_old, samples[m-1, :], p_0, U, grad_U, K, grad_K)
+            else:
+                print("ERROR: v is neither -1 nor 1")
+            
+            if s_prime == 1:
+                accept_probability = min(1.0, n_prime / n)
+                if np.random.uniform() <= accept_probability:
+                    samples[m, :] = q_prime
+
+            n = n + n_prime
+            
+            if np.dot(q_plus - q_minus, p_minus) >= 0 and np.dot(q_plus - q_minus, p_plus) >= 0:
+                s = s_prime
+            else:
+                s = 0
+            
+            j = j + 1
+
+
+
+    return samples
 
 
 
@@ -64,9 +154,9 @@ def build_tree(q, p, u, v, j, step_size, q_0, p_0, U, grad_U, K, grad_K):
         # else:
         #     s_prime
         
-        # acceptance_probability = min(1., np.exp(H_0 - H_prime))
+        # accept_probability = min(1., np.exp(H_0 - H_prime))
         # n_alpha_prime = 1
-        # return q_minus, p_minus, q_minus, p_minus, q_minus, n_prime, s_prime, acceptance_probability, n_alpha_prime
+        # return q_minus, p_minus, q_minus, p_minus, q_minus, n_prime, s_prime, accept_probability, n_alpha_prime
 
 
         ################################## SECOND OPTION ###########################################
@@ -77,7 +167,7 @@ def build_tree(q, p, u, v, j, step_size, q_0, p_0, U, grad_U, K, grad_K):
         n_prime = -1
 
         # TODO: Why H_0 here contrary to algorithm? If I leave it away there is a possibility of dividing by zero when cheking to set q_prime 
-        if u <= np.exp(H_0 - H_prime):
+        if u <= np.exp( -H_prime):
             n_prime = 1
         else:
             n_prime = 0
@@ -88,8 +178,8 @@ def build_tree(q, p, u, v, j, step_size, q_0, p_0, U, grad_U, K, grad_K):
         else:
             s_prime = 0
         
-        acceptance_probability = min(1., np.exp(H_0 - H_prime))
-        return q_prime, p_prime, q_prime, p_prime, q_prime, n_prime, s_prime, acceptance_probability, 1
+        accept_probability = min(1., np.exp(H_0 - H_prime))
+        return q_prime, p_prime, q_prime, p_prime, q_prime, n_prime, s_prime, accept_probability, 1
     else:
 
         # TODO: Check argument order and naming
@@ -191,6 +281,13 @@ if __name__ == "__main__":
     # Energy definitions End ##############################################################################
     #######################################################################################################
 
+    num_samples = 10
+    num_warmup_samples = 10
+    q_init = np.ones(shape=(2), dtype=float)
+    dim = np.shape(q_init)[0]
+    samples = nuts(num_samples, U, grad_U, q_init, dim, mass_matrix, num_warmup_samples=num_warmup_samples)
 
-    build_tree(q, p, u, v, j, step_size, q_0, p_0, U, grad_U, K, grad_K)
-
+    if verbose:
+        print("samples = ", samples)
+        q_estimate = np.average(samples, axis=0)
+        print("q_estimate = ", q_estimate)
