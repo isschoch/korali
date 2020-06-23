@@ -32,6 +32,13 @@ def leapfrog(q_init, p_init, grad_U, grad_K, step_size, num_steps):
     return q, p
 
 
+def leapfrog_step(q_init, p_init, grad_U, grad_K, step_size):
+    q_evolution, p_evolution = leapfrog(q_init, p_init, grad_U, grad_K, step_size, num_steps=1)
+
+    q = q_evolution[:, 1]
+    p = p_evolution[:, 1]
+    return q, p
+
 def test_euler(q_init, p_init, U, grad_U, grad_K, step_size, num_steps):
     q, p = explicit_euler(q_init, p_init, grad_U, grad_K, step_size, num_steps)
     print("q = ", q)
