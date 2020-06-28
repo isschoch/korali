@@ -21,38 +21,6 @@ namespace sampler
 {
 void HMC::setInitialConfiguration()
 {
-  // if (_chainCovarianceScaling <= 0.0) KORALI_LOG_ERROR("Chain Covariance Scaling must be larger 0.0 (is %lf).\n", _chainCovarianceScaling);
-  // if (_leap < 1) KORALI_LOG_ERROR("Leap must be larger 0 (is %zu).\n", _leap);
-  // if (_burnIn < 0) KORALI_LOG_ERROR("Burn In must be larger equal 0 (is %zu).\n", _burnIn);
-  // if (_rejectionLevels < 1) KORALI_LOG_ERROR("Rejection Levels must be larger 0 (is %zu).\n", _rejectionLevels);
-  // if (_nonAdaptionPeriod < 0) KORALI_LOG_ERROR("Non Adaption Period must be larger equal 0 (is %zu).\n", _nonAdaptionPeriod);
-
-  // // Allocating HMC memory
-  // _chainCandidate.resize(_rejectionLevels);
-  // for (size_t i = 0; i < _rejectionLevels; i++) _chainCandidate[i].resize(_k->_variables.size());
-
-  // _choleskyDecompositionCovariance.resize(_k->_variables.size() * _k->_variables.size());
-  // _chainLeader.resize(_k->_variables.size());
-  // _chainCandidatesEvaluations.resize(_rejectionLevels);
-  // _rejectionAlphas.resize(_rejectionLevels);
-  // _chainMean.resize(_k->_variables.size());
-  // _chainCovariancePlaceholder.resize(_k->_variables.size() * _k->_variables.size());
-  // _chainCovariance.resize(_k->_variables.size() * _k->_variables.size());
-  // _choleskyDecompositionChainCovariance.resize(_k->_variables.size() * _k->_variables.size());
-
-  // std::fill(std::begin(_choleskyDecompositionCovariance), std::end(_choleskyDecompositionCovariance), 0.0);
-  // std::fill(std::begin(_choleskyDecompositionChainCovariance), std::end(_choleskyDecompositionChainCovariance), 0.0);
-
-  // for (size_t i = 0; i < _k->_variables.size(); i++) _chainLeader[i] = _k->_variables[i]->_initialMean;
-  // for (size_t i = 0; i < _k->_variables.size(); i++) _choleskyDecompositionCovariance[i * _k->_variables.size() + i] = _k->_variables[i]->_initialStandardDeviation;
-
-  // // Init Generation
-  // _acceptanceCount = 0;
-  // _proposedSampleCount = 0;
-  // _chainLength = 0;
-  // _chainLeaderEvaluation = -std::numeric_limits<double>::infinity();
-  // _acceptanceRate = 1.0;
-
   //////////////////////////////////////////// My Code: START /////////////////////////////////////////////    
   if (_burnIn < 0) KORALI_LOG_ERROR("Burn In must be larger equal 0 (is %zu).\n", _burnIn);
   if (_nonAdaptionPeriod < 0) KORALI_LOG_ERROR("Non Adaption Period must be larger equal 0 (is %zu).\n", _nonAdaptionPeriod);
@@ -100,51 +68,11 @@ void HMC::runGeneration()
 
   bool _sampleAccepted = false;
 
-  // for (size_t i = 0; i < _rejectionLevels && _sampleAccepted == false; i++)
-  // {
-  //   generateCandidate(i);
-
-  //   auto sample = Sample();
-
-  //   _modelEvaluationCount++;
-  //   sample["Parameters"] = _chainCandidate[i];
-  //   sample["Sample Id"] = _sampleDatabase.size();
-  //   sample["Module"] = "Problem";
-  //   sample["Operation"] = "Evaluate";
-  //   _conduit->start(sample);
-  //   _conduit->wait(sample);
-
-  //   // change to logP(x)
-  //   double evaluation = KORALI_GET(double, sample, "P(x)");
-
-  //   _chainCandidatesEvaluations[i] = evaluation;
-
-  //   // Processing Result
-  //   double denom;
-  //   double _rejectionAlpha = recursiveAlpha(denom, _chainLeaderEvaluation, &_chainCandidatesEvaluations[0], i);
-
-  //   if (_rejectionAlpha == 1.0 || _rejectionAlpha > _uniformGenerator->getRandomNumber())
-  //   {
-  //     _acceptanceCount++;
-  //     _sampleAccepted = true;
-  //     _chainLeaderEvaluation = _chainCandidatesEvaluations[i];
-  //     _chainLeader = _chainCandidate[i];
-  //   }
-  // }
-
-  // if ((_chainLength >= _burnIn) && (_k->_currentGeneration % _leap == 0))
-  // {
-  //   _sampleDatabase.push_back(_chainLeader);
-  //   _sampleEvaluationDatabase.push_back(_chainLeaderEvaluation);
-  // }
-
-
   /////////////////////////////////////////// My Code: START /////////////////////////////////////////////
-  // TODO:CODE DELETE: Remove "0"
-  
+
   // Samples Momentum Candidate from N(0.0, metric)
-  generateCandidate(0);
-  
+  generateCandidate();
+  _momentumCandidate[0] = _normalGenerator->getRandomNumber();
   // Save old Energies
   _momentumLeader = _momentumCandidate;
   double K_old = K(_momentumLeader);
@@ -156,12 +84,6 @@ void HMC::runGeneration()
   {
     leapFrogStep();
   }
-
-  std::cout << "_positionLeader = " << _positionLeader[0] << std::endl;
-  std::cout << "_momentumLeader = " << _momentumLeader[0] << std::endl;
-
-  std::cout << "_positionCandidate = " << _positionCandidate[0] << std::endl;
-  std::cout << "_momentumCandidate = " << _momentumCandidate[0] << std::endl;
 
   // Save new Energies
   double K_new = K(_momentumCandidate);
@@ -183,10 +105,9 @@ void HMC::runGeneration()
     _sampleDatabase.push_back(_positionLeader);
   }
 
-  // TODO:CODE DELETE: Keep _acceptedSample, updateState and _chainLength++
   //////////////////////////////////////////// My Code: END //////////////////////////////////////////////
-  updateState();
   _chainLength++;
+  updateState();
 }
 
 void HMC::choleskyDecomp(const std::vector<double> &inC, std::vector<double> &outL) const
@@ -220,71 +141,20 @@ void HMC::choleskyDecomp(const std::vector<double> &inC, std::vector<double> &ou
   gsl_matrix_free(A);
 }
 
-// TODO: Remove function
-double HMC::recursiveAlpha(double &deonominator, const double leaderLoglikelihood, const double *loglikelihoods, size_t N) const
+void HMC::generateCandidate()
 {
-  // recursive formula from Trias[2009]
-
-  if (N == 0)
-  {
-    deonominator = exp(leaderLoglikelihood);
-    return std::min(1.0, exp(loglikelihoods[0] - leaderLoglikelihood));
-  }
-  else
-  {
-    // revert sample array
-    double *reversedLogLikelihoods = new double[N];
-    for (size_t i = 0; i < N; ++i) reversedLogLikelihoods[i] = loglikelihoods[N - 1 - i];
-
-    // update numerator (w. recursive calls)
-    double numerator = std::exp(loglikelihoods[N]);
-    for (size_t i = 0; i < N; ++i)
-    {
-      double dummyDenominator;
-      double alphaNumerator = recursiveAlpha(dummyDenominator, loglikelihoods[N], reversedLogLikelihoods, i);
-      numerator *= (1.0 - alphaNumerator);
-    }
-    delete[] reversedLogLikelihoods;
-
-    if (numerator == 0.0) return 0.0;
-
-    // update denomiator
-    double denominatorStar;
-    double alphaDenominator = recursiveAlpha(denominatorStar, leaderLoglikelihood, loglikelihoods, N - 1);
-    deonominator = denominatorStar * (1.0 - alphaDenominator);
-
-    return std::min(1.0, numerator / deonominator);
-  }
-}
-
-// TODO:CODE DELETE: Remove size_t sampleIdx
-void HMC::generateCandidate(size_t sampleIdx)
-{
-  _proposedSampleCount++;
-
-  // if (sampleIdx == 0)
-  //   for (size_t d = 0; d < _k->_variables.size(); ++d) _chainCandidate[sampleIdx][d] = _chainLeader[d];
-  // else
-  //   for (size_t d = 0; d < _k->_variables.size(); ++d) _chainCandidate[sampleIdx][d] = _chainCandidate[sampleIdx - 1][d];
-
-  // if ((_useAdaptiveSampling == false) || (_sampleDatabase.size() <= _nonAdaptionPeriod + _burnIn))
-  //   for (size_t d = 0; d < _k->_variables.size(); ++d)
-  //     for (size_t e = 0; e < _k->_variables.size(); ++e) _chainCandidate[sampleIdx][d] += _choleskyDecompositionCovariance[d * _k->_variables.size() + e] * _normalGenerator->getRandomNumber();
-  // else
-  //   for (size_t d = 0; d < _k->_variables.size(); ++d)
-  //     for (size_t e = 0; e < _k->_variables.size(); ++e) _chainCandidate[sampleIdx][d] += _choleskyDecompositionChainCovariance[d * _k->_variables.size() + e] * _normalGenerator->getRandomNumber();
-  
   /////////////////////////////////////////// My Code: START /////////////////////////////////////////////
-  // TODO:CODE DELETE: Comment line below back in
-  // _proposedSampleCount++;
+  _proposedSampleCount++;
   
   size_t dim = _k->_variables.size();
-  
+
   // saple momentum p from p ~ N(0.0, metric)
   if((_useAdaptiveSampling == false) || (_sampleDatabase.size() <= _nonAdaptionPeriod + _burnIn))
   {
     for(size_t d = 0; d < dim; ++d)
     {
+      // TODO: Change to std::fill
+      _momentumCandidate[d] = 0.0;
       for(size_t e = 0; e < dim; ++e)
       {
         _momentumCandidate[d] += _choleskyDecompositionMetric[d*dim + e] * _normalGenerator->getRandomNumber();
@@ -294,6 +164,7 @@ void HMC::generateCandidate(size_t sampleIdx)
   {
     for(size_t d = 0; d < dim; ++d)
     {
+      _momentumCandidate[d] = 0.0;
       for(size_t e = 0; e < dim; ++e)
       {
         _momentumCandidate[d] += _choleskyDecompositionEuclideanMetric[d*dim + e] * _normalGenerator->getRandomNumber();
@@ -305,37 +176,6 @@ void HMC::generateCandidate(size_t sampleIdx)
 
 void HMC::updateState()
 {
-  // _acceptanceRate = ((double)_acceptanceCount / (double)_chainLength);
-
-  // if (_sampleDatabase.size() == 0) return;
-  // if (_sampleDatabase.size() == 1)
-  // {
-  //   for (size_t d = 0; d < _k->_variables.size(); d++) _chainMean[d] = _chainLeader[d];
-  //   return;
-  // }
-
-  // for (size_t d = 0; d < _k->_variables.size(); d++)
-  //   for (size_t e = 0; e < d; e++)
-  //   {
-  //     _chainCovariancePlaceholder[d * _k->_variables.size() + e] = (_chainMean[d] - _chainLeader[d]) * (_chainMean[e] - _chainLeader[e]);
-  //     _chainCovariancePlaceholder[e * _k->_variables.size() + d] = (_chainMean[d] - _chainLeader[d]) * (_chainMean[e] - _chainLeader[e]);
-  //   }
-  // for (size_t d = 0; d < _k->_variables.size(); d++) _chainCovariancePlaceholder[d * _k->_variables.size() + d] = (_chainMean[d] - _chainLeader[d]) * (_chainMean[d] - _chainLeader[d]);
-
-  // // Chain Mean
-  // for (size_t d = 0; d < _k->_variables.size(); d++) _chainMean[d] = (_chainMean[d] * (_sampleDatabase.size() - 1) + _chainLeader[d]) / _sampleDatabase.size();
-
-  // for (size_t d = 0; d < _k->_variables.size(); d++)
-  //   for (size_t e = 0; e < d; e++)
-  //   {
-  //     _chainCovariance[d * _k->_variables.size() + e] = (_sampleDatabase.size() - 2.0) / (_sampleDatabase.size() - 1.0) * _chainCovariance[d * _k->_variables.size() + e] + (_chainCovarianceScaling / _sampleDatabase.size()) * _chainCovariancePlaceholder[d * _k->_variables.size() + e];
-  //     _chainCovariance[e * _k->_variables.size() + d] = (_sampleDatabase.size() - 2.0) / (_sampleDatabase.size() - 1.0) * _chainCovariance[d * _k->_variables.size() + e] + (_chainCovarianceScaling / _sampleDatabase.size()) * _chainCovariancePlaceholder[d * _k->_variables.size() + e];
-  //   }
-  // for (size_t d = 0; d < _k->_variables.size(); d++)
-  //   _chainCovariance[d * _k->_variables.size() + d] = (_sampleDatabase.size() - 2.0) / (_sampleDatabase.size() - 1.0) * _chainCovariance[d * _k->_variables.size() + d] + (_chainCovarianceScaling / _sampleDatabase.size()) * _chainCovariancePlaceholder[d * _k->_variables.size() + d];
-
-  // if ((_useAdaptiveSampling == true) && (_sampleDatabase.size() > _nonAdaptionPeriod)) choleskyDecomp(_chainCovariance, _choleskyDecompositionChainCovariance);
-
   /////////////////////////////////////////// My Code: START /////////////////////////////////////////////
   _acceptanceRate = ((double)_acceptanceCount / (double)_chainLength);
 
@@ -353,19 +193,21 @@ void HMC::updateState()
     return;
   }
 
-  for (size_t d = 0; d < _k->_variables.size(); d++)
+  if(_useAdaptiveSampling == true)
   {
-    for (size_t e = 0; e < d; e++)
+    for (size_t d = 0; d < _k->_variables.size(); d++)
     {
-      _inverseMetricPlaceholder[d * _k->_variables.size() + e] = (_positionMean[d] - _positionLeader[d]) * (_positionMean[e] - _positionLeader[e]);
-      _inverseMetricPlaceholder[e * _k->_variables.size() + d] = (_positionMean[d] - _positionLeader[d]) * (_positionMean[e] - _positionLeader[e]);
+      for (size_t e = 0; e < d; e++)
+      {
+        _inverseMetricPlaceholder[d * _k->_variables.size() + e] = (_positionMean[d] - _positionLeader[d]) * (_positionMean[e] - _positionLeader[e]);
+        _inverseMetricPlaceholder[e * _k->_variables.size() + d] = (_positionMean[d] - _positionLeader[d]) * (_positionMean[e] - _positionLeader[e]);
+      }
     }
+    for (size_t d = 0; d < _k->_variables.size(); d++)
+    {
+      _inverseMetricPlaceholder[d * _k->_variables.size() + d] = (_positionMean[d] - _positionLeader[d]) * (_positionMean[d] - _positionLeader[d]);
+    }  
   }
-
-  for (size_t d = 0; d < _k->_variables.size(); d++)
-  {
-    _inverseMetricPlaceholder[d * _k->_variables.size() + d] = (_positionMean[d] - _positionLeader[d]) * (_positionMean[d] - _positionLeader[d]);
-  }  
 
   // Chain Mean
   for (size_t d = 0; d < _k->_variables.size(); d++)
@@ -373,18 +215,21 @@ void HMC::updateState()
     _positionMean[d] = (_positionMean[d] * (_sampleDatabase.size() - 1) + _positionLeader[d]) / _sampleDatabase.size();
   }
 
-  for (size_t d = 0; d < _k->_variables.size(); d++)
+  if(_useAdaptiveSampling == true)
   {
-    for (size_t e = 0; e < d; e++)
+    for (size_t d = 0; d < _k->_variables.size(); d++)
     {
-      _inverseMetric[d * _k->_variables.size() + e] = (_sampleDatabase.size() - 2.0) / (_sampleDatabase.size() - 1.0) * _inverseMetric[d * _k->_variables.size() + e] + (_inverseMetricScaling / _sampleDatabase.size()) * _inverseMetricPlaceholder[d * _k->_variables.size() + e];
-      _inverseMetric[e * _k->_variables.size() + d] = (_sampleDatabase.size() - 2.0) / (_sampleDatabase.size() - 1.0) * _inverseMetric[d * _k->_variables.size() + e] + (_inverseMetricScaling / _sampleDatabase.size()) * _inverseMetricPlaceholder[d * _k->_variables.size() + e];
+      for (size_t e = 0; e < d; e++)
+      {
+        _inverseMetric[d * _k->_variables.size() + e] = (_sampleDatabase.size() - 2.0) / (_sampleDatabase.size() - 1.0) * _inverseMetric[d * _k->_variables.size() + e] + (_inverseMetricScaling / _sampleDatabase.size()) * _inverseMetricPlaceholder[d * _k->_variables.size() + e];
+        _inverseMetric[e * _k->_variables.size() + d] = (_sampleDatabase.size() - 2.0) / (_sampleDatabase.size() - 1.0) * _inverseMetric[d * _k->_variables.size() + e] + (_inverseMetricScaling / _sampleDatabase.size()) * _inverseMetricPlaceholder[d * _k->_variables.size() + e];
+      }
     }
-  }
 
-  for (size_t d = 0; d < _k->_variables.size(); d++)
-  {
-    _inverseMetric[d * _k->_variables.size() + d] = (_sampleDatabase.size() - 2.0) / (_sampleDatabase.size() - 1.0) * _inverseMetric[d * _k->_variables.size() + d] + (_inverseMetricScaling / _sampleDatabase.size()) * _inverseMetricPlaceholder[d * _k->_variables.size() + d];
+    for (size_t d = 0; d < _k->_variables.size(); d++)
+    {
+      _inverseMetric[d * _k->_variables.size() + d] = (_sampleDatabase.size() - 2.0) / (_sampleDatabase.size() - 1.0) * _inverseMetric[d * _k->_variables.size() + d] + (_inverseMetricScaling / _sampleDatabase.size()) * _inverseMetricPlaceholder[d * _k->_variables.size() + d];
+    }
   }
 
   if ((_useAdaptiveSampling == true) && (_sampleDatabase.size() > _nonAdaptionPeriod)) 
@@ -394,7 +239,6 @@ void HMC::updateState()
     choleskyDecomp(_metric, _choleskyDecompositionEuclideanMetric);
   }
   //////////////////////////////////////////// My Code: END //////////////////////////////////////////////
-
 }
 
 void HMC::printGenerationBefore() { return; }
@@ -409,12 +253,19 @@ void HMC::printGenerationAfter()
   _k->_logger->logInfo("Detailed", "Current Sample:\n");
   for (size_t d = 0; d < _k->_variables.size(); d++) _k->_logger->logData("Detailed", "         %s = %+6.3e\n", _k->_variables[d]->_name.c_str(), _positionLeader[d]);
 
-  _k->_logger->logInfo("Detailed", "Current Chain Mean:\n");
+  _k->_logger->logInfo("Detailed", "Current Position Mean:\n");
   for (size_t d = 0; d < _k->_variables.size(); d++) _k->_logger->logData("Detailed", "         %s = %+6.3e\n", _k->_variables[d]->_name.c_str(), _positionMean[d]);
-  _k->_logger->logInfo("Detailed", "Current Chain Covariance:\n");
+  _k->_logger->logInfo("Detailed", "Current Position Metric:\n");
   for (size_t d = 0; d < _k->_variables.size(); d++)
   {
     for (size_t e = 0; e <= d; e++) _k->_logger->logData("Detailed", "         %+6.3e  ", _metric[d * _k->_variables.size() + e]);
+    _k->_logger->logInfo("Detailed", "\n");
+  }
+
+  _k->_logger->logInfo("Detailed", "Current Position Inverse Metric:\n");
+  for (size_t d = 0; d < _k->_variables.size(); d++)
+  {
+    for (size_t e = 0; e <= d; e++) _k->_logger->logData("Detailed", "         %+6.3e  ", _inverseMetric[d * _k->_variables.size() + e]);
     _k->_logger->logInfo("Detailed", "\n");
   }
 }

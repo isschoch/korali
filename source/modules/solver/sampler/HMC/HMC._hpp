@@ -22,7 +22,6 @@ class HMC : public Sampler
   * @param loglikelihoods loglikelihoods of samples obtained after delay
   * @param N rescursion depth
   */
-  double recursiveAlpha(double &deonominator, const double leaderLoglikelihood, const double *loglikelihoods, size_t N) const;
 
   /**
   * @brief Updates internal state such as mean and covariance of chain.
@@ -32,7 +31,7 @@ class HMC : public Sampler
   /**
   * @brief Generate new sample.
   */
-  void generateCandidate(size_t sampleIdx);
+  void generateCandidate();
 
   /**
   * @brief Cholesky decomposition of chain covariance matrix.

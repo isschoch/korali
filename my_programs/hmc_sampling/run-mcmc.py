@@ -20,15 +20,26 @@ e["Problem"]["Probability Function"] = model
 
 # Configuring the HMC sampler parameters
 e["Solver"]["Type"] = "Sampler/HMC"
-e["Solver"]["Burn In"] = 500
+e["Solver"]["Burn In"] = 0
 e["Solver"]["Termination Criteria"]["Max Samples"] = 5000
-e["Solver"]["Num Integration Steps"] = 10
-e["Solver"]["Use Adaptive Sampling"] = 0
+e["Solver"]["Num Integration Steps"] = 20
+e["Solver"]["Step Size"] = 0.1
+# e["Solver"]["Use Adaptive Sampling"] = 1
 
 # Defining problem's variables
 e["Variables"][0]["Name"] = "X"
 e["Variables"][0]["Initial Mean"] = 0.0
 e["Variables"][0]["Initial Standard Deviation"] = 1.0
+
+e["Variables"][1]["Name"] = "Y"
+e["Variables"][1]["Initial Mean"] = 0.0
+e["Variables"][1]["Initial Standard Deviation"] = 1.0
+
+
+e["Variables"][2]["Name"] = "Z"
+e["Variables"][2]["Initial Mean"] = 0.0
+e["Variables"][2]["Initial Standard Deviation"] = 1.0
+
 
 # Configuring output settings
 e["File Output"]["Frequency"] = 500
