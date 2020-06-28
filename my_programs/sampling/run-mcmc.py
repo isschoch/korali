@@ -22,6 +22,8 @@ e["Problem"]["Probability Function"] = model
 e["Solver"]["Type"] = "Sampler/HMC"
 e["Solver"]["Burn In"] = 500
 e["Solver"]["Termination Criteria"]["Max Samples"] = 5000
+e["Solver"]["Num Integration Steps"] = 10
+e["Solver"]["Use Adaptive Sampling"] = 0
 
 # Defining problem's variables
 e["Variables"][0]["Name"] = "X"
