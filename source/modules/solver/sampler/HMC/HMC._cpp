@@ -74,6 +74,7 @@ void HMC::runGeneration()
     _conduit->start(sample);
     _conduit->wait(sample);
 
+    // change to logP(x)
     double evaluation = KORALI_GET(double, sample, "P(x)");
 
     _chainCandidatesEvaluations[i] = evaluation;
@@ -249,6 +250,101 @@ void HMC::finalize()
   (*_k)["Results"]["Sample Database"] = _sampleDatabase;
 }
 
+/////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+//////////////////////////////////////////////// My Functions: START ////////////////////////////////////////////////
+/////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+double HMC::K(std::vector<double> p)
+{
+  size_t dim = _k->_variables.size();
+  double result = 0.0;
+  
+  for(size_t i = 0; i < dim; ++i)
+  {
+    for(size_t j = 0; j < dim; ++j)
+    {
+      result = result + p[i] * _inverseMetric[i*dim + j] * p[j];
+    }
+  }
+  result = 0.5 * result;
+
+  return result;
+}
+
+std::vector<double> HMC::dK(std::vector<double> p)
+{
+  size_t dim = _k->_variables.size();
+  std::vector<double> result(dim, 0.0);
+  double sum = 0.0;
+
+  for(size_t i = 0; i < dim; ++i)
+  {
+    sum = 0.0;
+    for(size_t j = 0; j < dim; ++j)
+    {
+      sum = sum + _inverseMetric[i*dim + j] * p[j];
+    }
+    result[i] = sum;
+  }
+
+  return result;
+}
+
+double HMC::U(std::vector<double> q)
+{
+  auto sample = Sample();
+
+  _modelEvaluationCount++;
+  sample["Parameters"] = q;
+  sample["Sample Id"] = _sampleDatabase.size();
+  sample["Module"] = "Problem";
+  sample["Operation"] = "Evaluate";
+  _conduit->start(sample);
+  _conduit->wait(sample);
+
+  // change to logP(x)
+  double evaluation = KORALI_GET(double, sample, "P(x)");
+
+  return -evaluation;
+}
+
+std::vector<double> HMC::dU(std::vector<double> q)
+{
+  size_t dim = _k->_variables.size();
+  // TODO:Implement dU
+  std::vector<double> result(dim, 0.0);
+
+
+  return result;
+}
+
+void HMC::leapFrogStep()
+{
+  size_t dim = _k->_variables.size();
+  
+  std::vector<double> dU = std::vector<double> (dim, 0.);
+  // std::vector<double> dU = -KORALI_GET(std::vector<double>, theta, "dlogP(x)");
+  for(size_t i = 0; i < dim; ++i)
+  {
+    _momentumCandidate[i] = _momentumCandidate[i] - 0.5 * _stepSize * dU[i];
+  }
+  
+  // std::vector<double> dK = std::vector<double> (dim, 0.);
+  std::vector<double> dK = HMC::dK(_momentumCandidate);
+  for(size_t i = 0; i < dim; ++i)
+  {
+    _positionCandidate[i] = _positionCandidate[i] + _stepSize * dK[i];
+  }
+
+  dU = std::vector<double> (dim, 0.);
+  // std::vector<double> dU = -KORALI_GET(std::vector<double>, theta, "dP(x)");
+  for(size_t i = 0; i < dim; ++i)
+  {
+    _momentumCandidate[i] = _momentumCandidate[i] - 0.5 * _stepSize * dU[i]; 
+  }
+}
+/////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+///////////////////////////////////////////////// My Functions: END /////////////////////////////////////////////////
+/////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 } // namespace sampler
 
 } // namespace solver
