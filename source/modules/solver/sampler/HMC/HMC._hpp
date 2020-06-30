@@ -76,8 +76,8 @@ class HMC : public Sampler
   std::vector<double> dK(std::vector<double> p);
   double U(std::vector<double> q);
   std::vector<double> dU(std::vector<double> q);
-  void leapFrogStep();
-  void inverseMatrix(std::vector<double> mat, std::vector<double>& inverseMat);
+  void leapFrogStep(std::vector<double>& q, std::vector<double>& p, const double stepSize);
+  void invertMatrix(std::vector<double>& mat, std::vector<double>& inverseMat);
   ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////
   //////////////////////////////////////////////// My Functions: END ////////////////////////////////////////////////
   ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////
