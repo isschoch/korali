@@ -59,6 +59,17 @@ void HMC::setInitialConfiguration()
     _choleskyDecompositionMetric[i*dim + i] = _k->_variables[i]->_initialStandardDeviation;
   }
 
+  // initialize multivariate normal distribution
+  std::vector<double> zeroMean(_k->_variables.size(), 0.0);
+  _multivariateGenerator->_meanVector = zeroMean;
+  _multivariateGenerator->_sigma = _metric;
+
+  /* Cholesky Decomp */
+  gsl_matrix_view sigma = gsl_matrix_view_array(&_multivariateGenerator->_sigma[0], _k->_variables.size(), _k->_variables.size());
+  gsl_linalg_cholesky_decomp(&sigma.matrix);
+
+  _multivariateGenerator->updateDistribution();
+
   // Init Generation
   _acceptanceCount = 0;
   _proposedSampleCount = 0;
@@ -155,15 +166,20 @@ void HMC::generateCandidate()
   _proposedSampleCount++;
   
   size_t dim = _k->_variables.size();
-  std::fill(std::begin(_momentumCandidate), std::end(_momentumCandidate), 0.0);
   // saple momentum p from p ~ N(0.0, metric)
-  for(size_t d = 0; d < dim; ++d)
-  {
-    for(size_t e = 0; e < dim; ++e)
-    {
-      _momentumCandidate[d] += _choleskyDecompositionMetric[d*dim + e] * _normalGenerator->getRandomNumber();
-    }
-  }
+  
+  // Original implementation according to MCMC
+  // for(size_t d = 0; d < dim; ++d)
+  // {
+  //   _momentumCandidate[d] = 0;
+  //   for(size_t e = 0; e < d+1; ++e)
+  //   {
+  //     _momentumCandidate[d] += _choleskyDecompositionMetric[d*dim + e] * _normalGenerator->getRandomNumber();
+  //   }
+  // }
+  
+  // new implementation according to TMC
+  _multivariateGenerator->getRandomVector(&_momentumCandidate[0], dim);
   //////////////////////////////////////////// My Code: END //////////////////////////////////////////////
 }
 
@@ -249,13 +265,18 @@ void HMC::updateState()
           _inverseMetric[i*dim + k] = sum / (numWarmupSamples - 1);
           _inverseMetric[k*dim + i] = _inverseMetric[i*dim + k];
         }
-
-        // update Metric to be consisitent with Inverse Metric
-        invertMatrix(_inverseMetric, _metric);
-        
-        // update cholesky decomposition
-        choleskyDecomp(_metric, _choleskyDecompositionMetric);
       }    
+
+      // update Metric to be consisitent with Inverse Metric
+      invertMatrix(_inverseMetric, _metric);
+
+      // TODO: CHANGE BACK TO _METRIC
+      _multivariateGenerator->_sigma = _metric;
+      // /* Cholesky Decomp */
+      gsl_matrix_view sigma = gsl_matrix_view_array(&_multivariateGenerator->_sigma[0], dim, dim);
+      gsl_linalg_cholesky_decomp(&sigma.matrix);
+
+      _multivariateGenerator->updateDistribution();
     }
   }
   //////////////////////////////////////////// My Code: END //////////////////////////////////////////////
@@ -279,14 +300,14 @@ void HMC::printGenerationAfter()
 
   for (size_t d = 0; d < _k->_variables.size(); d++)
   {
-    for (size_t e = 0; e <= d; e++) _k->_logger->logData("Detailed", "         %+6.3e  ", _metric[d * _k->_variables.size() + e]);
+    for (size_t e = 0; e < _k->_variables.size(); e++) _k->_logger->logData("Detailed", "         %+6.3e  ", _metric[d * _k->_variables.size() + e]);
     _k->_logger->logInfo("Detailed", "\n");
   }
 
   _k->_logger->logInfo("Detailed", "Current Inverse Metric:\n");
   for (size_t d = 0; d < _k->_variables.size(); d++)
   {
-    for (size_t e = 0; e <= d; e++) _k->_logger->logData("Detailed", "         %+6.3e  ", _inverseMetric[d * _k->_variables.size() + e]);
+    for (size_t e = 0; e < _k->_variables.size(); e++) _k->_logger->logData("Detailed", "         %+6.3e  ", _inverseMetric[d * _k->_variables.size() + e]);
     _k->_logger->logInfo("Detailed", "\n");
   }
 }
@@ -366,6 +387,29 @@ std::vector<double> HMC::dU(std::vector<double> q)
 
   // POTENTIAL ERROR SOURCE
   // for(size_t i = 0; i < q.size(); ++i) result[i] /= 5.;
+
+  std::vector<double> cov(dim*dim, 0.0);
+
+  // make sure it is consistent with HMC::dU
+  cov[0] = 1.0;
+  cov[1] = -0.5;
+  cov[2] = -0.5;
+  cov[3] = 1.0;
+
+  std::vector<double> inverseCov(dim*dim, 0.0);
+  invertMatrix(cov, inverseCov);
+
+  double sum = 0.0;
+
+  for(size_t i = 0; i < dim; ++i)
+  {
+    sum = 0.0;
+    for(size_t j = 0; j < dim; ++j)
+    {
+      sum = sum + inverseCov[i*dim + j] * q[j];
+    }
+    result[i] = sum;
+  }
 
   return result;
 }

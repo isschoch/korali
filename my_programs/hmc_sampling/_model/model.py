@@ -10,7 +10,8 @@ def model(s):
   # print(np.shape(v))
   dim = len(v)
   # cov = np.array([[1.0, 0.0], [0.0, 1.0]], dtype=float)
-  cov = np.identity(dim, dtype=float)
+  # cov = np.identity(dim, dtype=float)
+  cov = np.array([[1.0, -0.5], [-0.5, 1.0]], dtype=float)
   cov_inv = np.linalg.inv(cov)
 
   mu = np.zeros(dim, dtype=float)

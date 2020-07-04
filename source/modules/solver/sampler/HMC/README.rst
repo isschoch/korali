@@ -1,8 +1,8 @@
 ********************************************************
-HMC (Delayed Rejection Adaptive Metropolis Algorithm)
+HMC (Hamiltonian Monte Carlo)
 ********************************************************
 
-This is an implementation of the *Delayed Rejection Adaptive Metropolis* algorithm,
-as published in `Haario2006 <https://link.springer.com/article/10.1007%2Fs11222-006-9438-0>`_.
-This solver can also be configured to run the standard *Metropolis Hastings* method.
+This is an implementation of the *Hamiltonian Monte Carlo* algorithm,
+as published in `Hoffman and Gelman <https://arxiv.org/abs/1111.4246>`_.
+This solver can also be configured to run the standard *HMC* method.
 

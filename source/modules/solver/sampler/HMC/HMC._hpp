@@ -1,8 +1,10 @@
 #ifndef _KORALI_SOLVER_HMC_HPP_
 #define _KORALI_SOLVER_HMC_HPP_
 
+// TODO: REMOVE normal/normal.hpp
 #include "modules/distribution/univariate/normal/normal.hpp"
 #include "modules/distribution/univariate/uniform/uniform.hpp"
+#include "modules/distribution/multivariate/normal/normal.hpp"
 #include "modules/solver/sampler/sampler.hpp"
 #include <vector>
 

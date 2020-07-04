@@ -20,8 +20,13 @@ e["Problem"]["Probability Function"] = model
 
 # Configuring the HMC sampler parameters
 e["Solver"]["Type"] = "Sampler/HMC"
+
 e["Solver"]["Burn In"] = 50000
 e["Solver"]["Termination Criteria"]["Max Samples"] = 50000
+
+# e["Solver"]["Burn In"] = 100
+# e["Solver"]["Termination Criteria"]["Max Samples"] = 5
+
 e["Solver"]["Num Integration Steps"] = 20
 e["Solver"]["Step Size"] = 0.1
 e["Solver"]["Use Euclidean Metric"] = 1
@@ -40,7 +45,7 @@ e["Variables"][1]["Initial Standard Deviation"] = 10.0
 
 # Configuring output settings
 e["File Output"]["Frequency"] = 500
-e["Console Output"]["Frequency"] = 500
+e["Console Output"]["Frequency"] = 100
 e["Console Output"]["Verbosity"] = "Detailed"
 
 # Starting Korali's Engine and running experiment
