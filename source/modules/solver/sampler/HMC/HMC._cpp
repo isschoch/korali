@@ -15,7 +15,6 @@
 
 /*
 TODO LIST:
-*adaptive timestepping
 *NUTS algorithm as option
 *calc dU with autmatic differentiation/specified by user
 */
