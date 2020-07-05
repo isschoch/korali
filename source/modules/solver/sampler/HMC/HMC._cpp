@@ -100,7 +100,7 @@ void HMC::runGeneration()
   double U_old = U(_positionLeader);
   _positionCandidate = _positionLeader;
 
-  if(_adaptiveTimeStepping == true)
+  if(_adaptiveTimeStepping == true && _chainLength <= _burnIn)
   {
     _numIntegrationSteps = std::max((size_t) 1, (size_t) (_targetIntegrationTime / _stepSize));
   }
@@ -126,26 +126,36 @@ void HMC::runGeneration()
     _positionLeader = _positionCandidate;
   }
 
-  if((_useEuclideanMetric == false) || ((_useEuclideanMetric == true) && (_chainLength >= _burnIn)))
+  if(_chainLength >= _burnIn)
   {
     _sampleDatabase.push_back(_positionLeader);
   }
-  else
+  else if(_useEuclideanMetric == true)
   {
     _warmupSampleDatabase.push_back(_positionLeader);
+  }
 
-    if(_adaptiveTimeStepping == true)
+  // Update Step Size, Dual Step Size, H Bar for adaptive time stepping
+  if(_adaptiveTimeStepping == true && _chainLength <= _burnIn)
+  {
+    // TODO: Update ugly control flow
+    if(_chainLength < _burnIn)
     {
       // constants for adaptive time stepping
-      double gamma = 0.05;
-      double t_0 = 10.0;
-      double kappa = 0.75;
+      const double gamma = 0.05;
+      const double t_0 = 10.0;
+      const double kappa = 0.75;
 
       _hBar = (1.0 - 1.0 / (_chainLength + 1 + t_0)) * _hBar + (_desiredAverageAcceptanceRate - alpha) / (_chainLength + 1 + t_0);
       _stepSize = std::exp((_mu - std::sqrt(_chainLength + 1) / gamma * _hBar));
       _dualStepSize = std::pow((_stepSize/_dualStepSize), std::pow(_chainLength + 1, -kappa)) * _stepSize;
     }
+    else if(_chainLength == _burnIn)
+    {
+      _stepSize = _dualStepSize;
+    }
   }
+
 
   //////////////////////////////////////////// My Code: END //////////////////////////////////////////////
   ++_chainLength;

@@ -31,8 +31,8 @@ e["Console Output"]["Frequency"] = 500
 
 e["Solver"]["Num Integration Steps"] = 20
 e["Solver"]["Step Size"] = 0.1
-e["Solver"]["Use Euclidean Metric"] = 1
-e["Solver"]["Adaptive Time Stepping"] = 1
+e["Solver"]["Use Euclidean Metric"] = 0
+e["Solver"]["Adaptive Time Stepping"] = 0
 e["Solver"]["Target Integration Time"] = 10.0
 
 
