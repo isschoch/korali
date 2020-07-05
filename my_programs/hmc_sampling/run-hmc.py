@@ -23,29 +23,31 @@ e["Solver"]["Type"] = "Sampler/HMC"
 
 e["Solver"]["Burn In"] = 50000
 e["Solver"]["Termination Criteria"]["Max Samples"] = 50000
+e["Console Output"]["Frequency"] = 500
 
-# e["Solver"]["Burn In"] = 100
-# e["Solver"]["Termination Criteria"]["Max Samples"] = 5
+# e["Solver"]["Burn In"] = 30
+# e["Solver"]["Termination Criteria"]["Max Samples"] = 1
+# e["Console Output"]["Frequency"] = 1
 
 e["Solver"]["Num Integration Steps"] = 20
 e["Solver"]["Step Size"] = 0.1
 e["Solver"]["Use Euclidean Metric"] = 1
+e["Solver"]["Adaptive Time Stepping"] = 1
+e["Solver"]["Target Integration Time"] = 10.0
 
 
 # Defining problem's variables
 e["Variables"][0]["Name"] = "X"
 e["Variables"][0]["Initial Mean"] = 0.0
-e["Variables"][0]["Initial Standard Deviation"] = 10.0
+e["Variables"][0]["Initial Standard Deviation"] = 1.0
 
 e["Variables"][1]["Name"] = "Y"
 e["Variables"][1]["Initial Mean"] = 0.0
-e["Variables"][1]["Initial Standard Deviation"] = 10.0
-
+e["Variables"][1]["Initial Standard Deviation"] = 1.0
 
 
 # Configuring output settings
 e["File Output"]["Frequency"] = 500
-e["Console Output"]["Frequency"] = 100
 e["Console Output"]["Verbosity"] = "Detailed"
 
 # Starting Korali's Engine and running experiment
