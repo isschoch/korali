@@ -12,7 +12,6 @@ def getVariableType(v):
   return v['Type'].replace('bool', 'int').replace(
       'std::function<void(korali::Sample&)>', 'std::uint64_t')
 
-
 def getCXXVariableName(v):
   cVarName = ''
   for name in v:
@@ -127,6 +126,7 @@ def consumeValue(base, moduleName, path, varName, varType, isMandatory,
 
   if ('std::vector<korali::' in varType):
     baseType = varType.replace('std::vector<', '').replace('>', '')
+    cString += ' ' + varName + '.clear();\n'
     cString += ' for(size_t i = 0; i < ' + base + path + '.size(); i++) ' + varName + '.push_back((' + baseType + ')korali::Module::getModule(' + base + path + '[i], _k));\n'
     cString += ' eraseValue(' + base + ', ' + path.replace('][', ", ").replace(
         '[', '').replace(']', '') + ');\n\n'
@@ -193,7 +193,7 @@ def saveValue(base, path, varName, varType):
     return sString
 
   if ('korali::' in varType):
-    sString = ' ' + varName + '->getConfiguration(' + base + path + ');\n'
+    sString = ' if(' + varName + ' != NULL) ' + varName + '->getConfiguration(' + base + path + ');\n'
     return sString
 
   sString = '   ' + base + path + ' = ' + varName + ';\n'
@@ -209,19 +209,20 @@ def createSetConfiguration(module):
 
   codeString += ' if (isDefined(js, "Results"))  eraseValue(js, "Results");\n\n'
 
+  # Consume Internal Settings
+  if 'Internal Settings' in module:
+    for v in module["Internal Settings"]:
+      codeString += consumeValue('js', module["Name"], getVariablePath(v),
+                                 getCXXVariableName(v["Name"]),
+                                 getVariableType(v), False,
+                                 getVariableOptions(v))
+                                 
   # Consume Configuration Settings
   if 'Configuration Settings' in module:
     for v in module["Configuration Settings"]:
       codeString += consumeValue('js', module["Name"], getVariablePath(v),
                                  getCXXVariableName(v["Name"]),
                                  getVariableType(v), True,
-                                 getVariableOptions(v))
-
-  if 'Internal Settings' in module:
-    for v in module["Internal Settings"]:
-      codeString += consumeValue('js', module["Name"], getVariablePath(v),
-                                 getCXXVariableName(v["Name"]),
-                                 getVariableType(v), False,
                                  getVariableOptions(v))
 
   if 'Termination Criteria' in module:
@@ -232,6 +233,7 @@ def createSetConfiguration(module):
           getVariableOptions(v))
 
   if 'Variables Configuration' in module:
+    codeString += ' if (isDefined(_k->_js.getJson(), "Variables"))\n'
     codeString += ' for (size_t i = 0; i < _k->_js["Variables"].size(); i++) { \n'
     for v in module["Variables Configuration"]:
       codeString += consumeValue(
@@ -322,7 +324,8 @@ def createGetConfiguration(module):
   codeString += ' ' + module["Parent Class"] + '::getConfiguration(js);\n'
 
   if 'Experiment' == module['Name']:
-     codeString += ' js["Variables"] = _js["Variables"];\n'
+     codeString += ' if (isDefined(_js.getJson(), "Variables"))\n'
+     codeString += '   js["Variables"] = _js["Variables"];\n'
 
   codeString += '} \n\n'
 
@@ -359,8 +362,9 @@ def createApplyVariableDefaults(module):
     codeString += ' std::string defaultString = "' + json.dumps(
         module["Variable Defaults"]).replace('"', '\\"') + '";\n'
     codeString += ' knlohmann::json defaultJs = knlohmann::json::parse(defaultString);\n'
-    codeString += ' for (size_t i = 0; i < _k->_js["Variables"].size(); i++) \n'
-    codeString += '  mergeJson(_k->_js["Variables"][i], defaultJs); \n'
+    codeString += ' if (isDefined(_k->_js.getJson(), "Variables"))\n'
+    codeString += '  for (size_t i = 0; i < _k->_js["Variables"].size(); i++) \n'
+    codeString += '   mergeJson(_k->_js["Variables"][i], defaultJs); \n'
 
   codeString += ' ' + module["Parent Class"] + '::applyVariableDefaults();\n'
   codeString += '} \n\n'

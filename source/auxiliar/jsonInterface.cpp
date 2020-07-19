@@ -3,6 +3,7 @@
 ******************************************************************************/
 
 #include "auxiliar/jsonInterface.hpp"
+#include "auxiliar/logger.hpp"
 #include <string>
 
 namespace korali
@@ -63,16 +64,8 @@ bool isElemental(const knlohmann::json &js)
 
 void mergeJson(knlohmann::json &dest, const knlohmann::json &defaults)
 {
-  if (dest.is_object() == false)
-  {
-    fprintf(stderr, "Passed JSON A argument is not an object.\n");
-    exit(-1);
-  }
-  if (defaults.is_object() == false)
-  {
-    fprintf(stderr, "Passed JSON B argument is not an object.\n");
-    exit(-1);
-  }
+  if (dest.is_object() == false) KORALI_LOG_ERROR("Passed JSON A argument is not an object.\n");
+  if (defaults.is_object() == false) KORALI_LOG_ERROR("Passed JSON B argument is not an object.\n");
 
   for (auto &x : defaults.items())
   {

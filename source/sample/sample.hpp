@@ -56,6 +56,11 @@ class Sample
   Sample *_self;
 
   /**
+  * @brief Pointer to global parameters
+  */
+  knlohmann::json *_globals;
+
+  /**
   * @brief Current state of the sample
   */
   SampleState _state;
@@ -64,6 +69,11 @@ class Sample
   * @brief User-Level thread (coroutine) containing the CPU execution state of the current Sample.
   */
   cothread_t _sampleThread;
+
+  /**
+  * @brief User-Level thread (coroutine) containing the CPU execution state of the calling worker.
+  */
+  cothread_t _workerThread;
 
   /**
   * @brief Determines whether the thread memory has been allocated.
@@ -90,12 +100,18 @@ class Sample
   /**
   * @brief Handles the execution thread of individual samples on the worker's side
   */
-  static void sampleLauncher();
+  void sampleLauncher();
 
   /**
-  * @brief Rreturns results to engine without finishing the sample.
+  * @brief Returns results to the worker without finishing the execution of the computational model.
   */
   void update();
+
+  /**
+  * @brief Returns global parameters broadcasted by the problem
+  * @return The global parameters
+  */
+  knlohmann::json &globals();
 
   /**
   * @brief Checks whether the sample contains the given key.

@@ -1,0 +1,86 @@
+#ifndef _KORALI_SOLVER_DeepGD_HPP_
+#define _KORALI_SOLVER_DeepGD_HPP_
+
+#include "engine.hpp"
+#include "modules/experiment/experiment.hpp"
+#include "modules/neuralNetwork/neuralNetwork.hpp"
+#include "modules/problem/supervisedLearning/supervisedLearning.hpp"
+#include "modules/solver/learner/learner.hpp"
+
+namespace korali
+{
+namespace solver
+{
+namespace learner
+{
+class DeepGD : public Learner
+{
+  public:
+  /**
+ * @brief Korali engine for optimizing NN weights and biases
+ */
+  problem::SupervisedLearning *_problem;
+
+  /**
+ * @brief Korali engine for optimizing the NN's weights and biases
+ */
+  korali::Engine _optEngine;
+
+  /**
+ * @brief Korali engine for optimizing the NN's weights and biases
+ */
+  korali::Experiment _optExperiment;
+
+  /**
+   * @brief A neural network to perform input evaluation and obtain gradients
+   */
+  NeuralNetwork *_evaluationNeuralNetwork;
+
+  /**
+   * @brief Keeps track of whether the training/validation configuration has been built
+   */
+  bool _isLearnerInitialized;
+
+  /**
+   * @brief Keeps track of whether the evaluation NN's forward pipeline has been initialized
+   */
+  bool _isEvaluationNNForwardInitialized;
+
+  /**
+   * @brief Keeps track of whether the evaluation NN's backward pipeline has been initialized
+   */
+  bool _isEvaluationNNBackwardInitialized;
+
+  /**
+  * @brief Stores the parameters of a sample into the weights and biases storage of the NN
+  * @param nn The neural network to update
+  * @param params Parameter vector containing the weights and biases
+  * @return The number of variables read
+  */
+  size_t storeWeightsBiasAndNormalization(NeuralNetwork *nn, const std::vector<double> params);
+
+  /**
+  * @brief Model function to evaluate a given NN weight/bias configuration
+  * @param sample The sample containing proposal NN weight/bias configuration.
+  * @param nn The neural network to update
+  * @param solution Solution values from which to calculate loss and differentials
+  * @param getGradients Flag that indicates whether the gradients are required
+  */
+  void evaluateWeightsAndBiases(korali::Sample &sample, NeuralNetwork *nn, const std::vector<std::vector<double>> &solution, bool getGradients = false);
+
+  std::vector<std::vector<double>> getGradients(const std::vector<std::vector<double>> &outputDiffs) override;
+  std::vector<std::vector<double>> getEvaluation(const std::vector<std::vector<double>> &inputBatch) override;
+
+  knlohmann::json &getHyperparameters() override;
+  void setHyperparameters(const knlohmann::json &parameters) override;
+  void finalize() override;
+  void initialize() override;
+  void runGeneration() override;
+  void printGenerationAfter() override;
+};
+
+} // namespace learner
+} // namespace solver
+} // namespace korali
+
+#endif // _KORALI_SOLVER_DEEP_DeepGD_HPP_

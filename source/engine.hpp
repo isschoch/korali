@@ -143,29 +143,14 @@ class Engine : public Module
   bool _isDryRun;
 
   /**
-    * @brief A pointer to the worker, on the worker side.
-    */
-  Conduit *_currentWorker;
-
-  /**
   * @brief (Worker) Stores a pointer to the current Experiment being processed
   */
   Experiment *_currentExperiment;
 
   /**
-  * @brief Stores a pointer to the current sample being processed
-  */
-  Sample *_currentSample;
-
-  /**
   * @brief (Engine) Stores a pointer to the current sample to process
   */
   Sample *_engineSample;
-
-  /**
-   * @brief Stores the state of a worker thread
-   */
-  cothread_t _workerThread;
 
   /**
    * @brief Returns the worker teams MPI communication pointer (Distributed Conduit only).

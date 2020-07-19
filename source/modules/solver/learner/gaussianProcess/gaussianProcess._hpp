@@ -1,0 +1,61 @@
+#ifndef _KORALI_SOLVER_GAUSSIAN_PROCESS_HPP_
+#define _KORALI_SOLVER_GAUSSIAN_PROCESS_HPP_
+
+#include "engine.hpp"
+#include "gp/gp.h"
+#include "modules/experiment/experiment.hpp"
+#include "modules/problem/supervisedLearning/supervisedLearning.hpp"
+#include "modules/solver/learner/learner.hpp"
+
+#include <memory>
+
+namespace korali
+{
+namespace solver
+{
+namespace learner
+{
+class GaussianProcess : public Learner
+{
+  public:
+  ~GaussianProcess();
+
+  /**
+  * @brief Korali engine for optimizing NN weights and biases
+  */
+  problem::SupervisedLearning *_problem;
+
+  /**
+  * @brief Pointer to the gaussian processes library
+  */
+  std::unique_ptr<libgp::GaussianProcess> _gp;
+
+  /**
+  * @brief Korali engine for optimizing the GP's parameters
+  */
+  Engine _koraliEngine;
+
+  /**
+  * @brief Korali experiment for optimizing the GP's parameters
+  */
+  Experiment _koraliExperiment;
+
+  /**
+  * @brief Model function to evaluate the error function of the GP
+  * @param sample The sample containing the proposal parameters
+  * @param gp Pointer to the GP
+  */
+  static void runSample(Sample &sample, libgp::GaussianProcess *gp);
+
+  std::vector<std::vector<double>> getEvaluation(const std::vector<std::vector<double>> &input) override;
+  knlohmann::json &getHyperparameters() override;
+  void setHyperparameters(const knlohmann::json &parameters) override;
+  void initialize() override;
+  void runGeneration() override;
+  void printGenerationAfter() override;
+};
+} // namespace learner
+} // namespace solver
+} // namespace korali
+
+#endif // _KORALI_SOLVER_GAUSSIAN_PROCESS_HPP_

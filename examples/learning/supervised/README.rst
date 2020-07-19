@@ -1,5 +1,4 @@
-Supervised Learning
-======================
+Deep Learning
+====================
 
-In this section, we show different ways to solve supervised learning problems with Korali.
-
+Example problem for supervised learning using a neural network to approximate a sine wave from a train and validation set.

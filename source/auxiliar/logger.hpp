@@ -20,18 +20,17 @@ namespace korali
 */
 class Logger
 {
-  private:
+  public:
   /**
  * @brief Global variable that contains the verbosity level for the current Korali experiment.
  */
-  size_t __verbosityLevel;
+  size_t _verbosityLevel;
 
   /**
  * @brief Global variable that contains the output file for the current Korali experiment.
  */
-  FILE *__outputFile;
+  FILE *_outputFile;
 
-  public:
   /**
  * @brief Default constructor for Korali Logger
  */

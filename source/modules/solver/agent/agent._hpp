@@ -1,0 +1,50 @@
+#ifndef _KORALI_AGENT_HPP_
+#define _KORALI_AGENT_HPP_
+
+#include "engine.hpp"
+#include "modules/problem/reinforcementLearning/reinforcementLearning.hpp"
+#include "modules/solver/solver.hpp"
+
+namespace korali
+{
+namespace solver
+{
+class Agent : public Solver
+{
+  public:
+  /**
+  * @brief Storage for the pointer to the learning problem
+  */
+  problem::ReinforcementLearning *_problem;
+
+  /**
+   * @brief Gets the next action for the actor, based on a sample containing a state, from inside Korali
+   * @param sample the sample containing the state and other required information
+   */
+  virtual void getAction(Sample &sample) = 0;
+
+  /**
+   * @brief Gets the next action for the actor, based on the state, as requested by the user
+   * @param state The vector containing the state and other required information
+   * @return A vector containing the action
+   */
+  virtual std::vector<double> getAction(const std::vector<double> &state) = 0;
+
+  /**
+  * @brief Updates the algorithm's policy, based on the new experiences
+  */
+  virtual void updatePolicy() = 0;
+
+  /**
+ * @brief Runs a generation of the environment(s), running an action on each episode, and updating the policy.
+ */
+  void runGeneration() override;
+
+  void printGenerationAfter() override;
+  void initialize() override;
+};
+
+} // namespace solver
+} // namespace korali
+
+#endif // _KORALI_AGENT_HPP_

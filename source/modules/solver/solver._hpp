@@ -36,13 +36,6 @@ class Solver : public Module
   virtual void setInitialConfiguration(){};
 
   /**
-    * @brief For solver modules which have been trained, test returns an infered output batch, from a batch of inputs to process.
-    * @param inputBatch The inputs from which to infer outputs.
-    * @return The inferred outputs
-   */
-  virtual std::vector<std::vector<double>> evaluate(const std::vector<std::vector<double>> &inputBatch);
-
-  /**
   * @brief Stores termination criteria for the module.
   */
   std::vector<std::string> _terminationCriteria;

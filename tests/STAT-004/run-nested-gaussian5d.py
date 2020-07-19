@@ -30,8 +30,8 @@ e["Solver"]["Resampling Method"] = "Ellipse"
 for i in range(5):
   e["Distributions"][i]["Name"] = "Uniform " + str(i)
   e["Distributions"][i]["Type"] = "Univariate/Uniform"
-  e["Distributions"][i]["Minimum"] = -5.0
-  e["Distributions"][i]["Maximum"] = +5.0
+  e["Distributions"][i]["Minimum"] = -2.0
+  e["Distributions"][i]["Maximum"] = +2.0
 
   # Configuring the problem's variables and their prior distributions
   e["Variables"][i]["Name"] = "a" + str(i)
@@ -40,7 +40,7 @@ for i in range(5):
 e["File Output"]["Enabled"] = False
 e["Console Output"]["Frequency"] = 1000
 e["Solver"]["Termination Criteria"]["Max Generations"] = 50000
-e["Solver"]["Termination Criteria"]["Max Gain Factor"] = 1e-9
+e["Solver"]["Termination Criteria"]["Min Log Evidence Delta"] = 1e-9
 e["Solver"]["Termination Criteria"]["Max Effective Sample Size"] = 50000
 
 e["Random Seed"] = 1337
@@ -48,5 +48,5 @@ e["Random Seed"] = 1337
 # Running Korali
 k.run(e)
 
-verifyMean(e["Results"]["Sample Database"], [0.0, 0.0, 0.0, 0.0, 0.0], 0.05)
-verifyStd(e["Results"]["Sample Database"], [1.0, 1.0, 1.0, 1.0, 1.0], 0.05)
+verifyMean(e["Results"]["Posterior Sample Database"], [0.0, 0.0, 0.0, 0.0, 0.0], 0.05)
+verifyStd(e["Results"]["Posterior Sample Database"], [1.0, 1.0, 1.0, 1.0, 1.0], 0.05)

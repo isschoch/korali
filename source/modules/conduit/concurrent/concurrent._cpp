@@ -78,15 +78,6 @@ void Concurrent::initServer()
   }
 }
 
-void Concurrent::update(Sample &sample)
-{
-  string resultString = sample._js.getJson().dump();
-  size_t resultStringSize = resultString.size();
-
-  write(_resultPipe[_workerId][1], &resultStringSize, sizeof(size_t));
-  write(_resultPipe[_workerId][1], resultString.c_str(), resultStringSize * sizeof(char));
-}
-
 void Concurrent::worker(int workerId)
 {
   _workerId = workerId;
@@ -112,7 +103,19 @@ void Concurrent::worker(int workerId)
     auto actionJs = knlohmann::json::parse(inputString);
 
     if (actionJs["Conduit Action"] == "Terminate") exit(0);
-    if (actionJs["Conduit Action"] == "Process Sample") initiateSample(actionJs);
+    if (actionJs["Conduit Action"] == "Process Sample")
+    {
+      Sample s;
+      s._globals = &_globals;
+      s._js.getJson() = actionJs;
+      s.sampleLauncher();
+
+      string resultString = s._js.getJson().dump();
+      size_t resultStringSize = resultString.size();
+
+      write(_resultPipe[_workerId][1], &resultStringSize, sizeof(size_t));
+      write(_resultPipe[_workerId][1], resultString.c_str(), resultStringSize * sizeof(char));
+    }
     if (actionJs["Conduit Action"] == "Broadcast Globals") _globals = actionJs;
     if (actionJs["Conduit Action"] == "Stack Engine") _engineStack.push(Engine::deserialize(actionJs["Engine"]));
     if (actionJs["Conduit Action"] == "Pop Engine") _engineStack.pop();
@@ -124,20 +127,14 @@ void Concurrent::processSample(Sample &sample)
   Engine *engine = _engineStack.top();
 
   int launcherId = -1;
-  if (isDefined(sample._js.getJson(), "Worker"))
+
+  while (_launcherQueue.empty())
   {
-    launcherId = sample["Worker"];
+    sample._state = SampleState::waiting;
+    co_switch(engine->_currentExperiment->_thread);
   }
-  else
-  {
-    while (_launcherQueue.empty())
-    {
-      sample._state = SampleState::waiting;
-      co_switch(engine->_currentExperiment->_thread);
-    }
-    launcherId = _launcherQueue.front();
-    _launcherQueue.pop();
-  }
+  launcherId = _launcherQueue.front();
+  _launcherQueue.pop();
 
   auto js = knlohmann::json();
   js["Start Time"] = chrono::duration<double>(chrono::high_resolution_clock::now() - _startTime).count() + _cumulativeTime;
@@ -247,11 +244,6 @@ void Concurrent::broadcastGlobals(knlohmann::json &globalsJs)
       curPos += bufSize;
     }
   }
-}
-
-size_t Concurrent::maxConcurrency()
-{
-  return _concurrentJobs;
 }
 
 } // namespace conduit

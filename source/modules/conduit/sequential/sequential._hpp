@@ -13,13 +13,6 @@ class Sequential : public Conduit
   private:
   public:
   /**
- * @brief Gets back to Korali's engine from the model without finalizing the sample.
- * The purpose is to update its state with new information without finalizing the function's environment.
- * @param sample Sample to update.
- */
-  void update(Sample &sample) override;
-
-  /**
   * @brief Initializes the conduit's configuration, only once per process.
   */
   void initialize() override;

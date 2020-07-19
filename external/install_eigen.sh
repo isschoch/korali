@@ -2,7 +2,7 @@
 
 ######### Global Definitions ########
 libName="eigen"
-minVersion=
+minVersion=3.3.7
 
 ######### Helper Functions ########
 
@@ -116,14 +116,22 @@ if [ ${fileFound} == 0 ]; then
  mkdir -p $installDir; check
  pushd $buildDir; check
  
- git clone https://gitlab.com/libeigen/eigen.git $buildDir; check
+ dst="eigen-${minVersion}"
+ rm -f ${dst}.tar.gz; check
+ rm -rf ${dst}; check
+ 
+ wget https://gitlab.com/libeigen/eigen/-/archive/${minVersion}/${dst}.tar.gz; check
+ tar -xzvf ${dst}.tar.gz ; check
   
  echo "[Korali] Configuring ${libName}... "
+ cd ${dst}
  mkdir -p build; check
  cd build; check
-  
- CXXFLAGS=-O3 ${externalDir}/cmake .. -DCMAKE_INSTALL_PREFIX=${installDir}; check
- 
+
+ CXXFLAGS=-O3 ${externalDir}/cmake .. \
+     -DBUILD_TESTING=OFF \
+     -DCMAKE_INSTALL_PREFIX=${installDir}; check
+
  echo "[Korali] Building ${libName}... "
  make -j$NJOBS; check
  

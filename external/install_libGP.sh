@@ -123,14 +123,20 @@ if [ ${fileFound} == 0 ]; then
  mkdir -p $buildDir; check
  pushd $buildDir; check
  
- git clone https://github.com/mblum/libgp.git $buildDir; check
+ # no versioning system
+ git clone https://github.com/mblum/libgp.git --depth=1 $buildDir; check
   
  echo "[Korali] Configuring ${libName}... "
  mkdir -p build; check
  cd build; check
-  
- CXXFLAGS=-O3 ${externalDir}/cmake .. -DCMAKE_INSTALL_PREFIX=${installDir} -DBUILD_SHARED_LIBS=true -DEIGEN3_INCLUDE_DIR=${externalDir}/eigenlink/include/eigen3/; check
- 
+
+ CXXFLAGS=-O3 ${externalDir}/cmake .. \
+     -DBUILD_TESTS=OFF \
+     -DBUILD_EXAMPLES=OFF \
+     -DCMAKE_INSTALL_PREFIX=${installDir} \
+     -DBUILD_SHARED_LIBS=true \
+     -DEIGEN3_INCLUDE_DIR=${externalDir}/eigenlink/include/eigen3/; check
+
  echo "[Korali] Building ${libName}... "
  make -j$NJOBS; check
  

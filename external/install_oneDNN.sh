@@ -3,7 +3,7 @@
 ######### Global Definitions ########
 libName="oneDNN"
 binName="oneDNN"
-minVersion=
+minVersion=1.5
 
 ######### Helper Functions ########
 
@@ -124,14 +124,24 @@ if [ ${fileFound} == 0 ]; then
  mkdir -p $buildDir; check
  pushd $buildDir; check
  
- git clone https://github.com/oneapi-src/oneDNN.git $buildDir; check
+ dst="v${minVersion}"
+ rm -f ${dst}.tar.gz; check
+ rm -rf ${dst}; check
+ 
+ wget https://github.com/oneapi-src/oneDNN/archive/${dst}.tar.gz; check
+ tar -xzvf ${dst}.tar.gz ; check
   
  echo "[Korali] Configuring ${libName}... "
+ cd "oneDNN-${minVersion}"
  mkdir -p build; check
  cd build; check
-  
- CXXFLAGS=-O3 ${externalDir}/cmake .. -DCMAKE_INSTALL_PREFIX=${installDir} -DBUILD_SHARED_LIBS=true; check
- 
+
+ CXXFLAGS=-O3 ${externalDir}/cmake .. \
+     -DDNNL_BUILD_EXAMPLES=OFF \
+     -DDNNL_BUILD_TESTS=OFF \
+     -DCMAKE_INSTALL_PREFIX=${installDir} \
+     -DBUILD_SHARED_LIBS=true; check
+
  echo "[Korali] Building ${libName}... "
  make -j$NJOBS; check
  

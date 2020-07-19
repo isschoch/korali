@@ -8,24 +8,24 @@ namespace korali
 {
 Logger::Logger()
 {
-  __verbosityLevel = 3;
-  __outputFile = stdout;
+  _verbosityLevel = 3;
+  _outputFile = stdout;
 }
 
 Logger::Logger(const std::string verbosityLevel, FILE *file)
 {
-  __verbosityLevel = getVerbosityLevel(verbosityLevel);
-  __outputFile = file;
+  _verbosityLevel = getVerbosityLevel(verbosityLevel);
+  _outputFile = file;
 }
 
 void Logger::setVerbosityLevel(const std::string verbosityLevel)
 {
-  __verbosityLevel = getVerbosityLevel(verbosityLevel);
+  _verbosityLevel = getVerbosityLevel(verbosityLevel);
 }
 
 void Logger::setConsoleOutputFile(FILE *file)
 {
-  __outputFile = file;
+  _outputFile = file;
 }
 
 size_t Logger::getVerbosityLevel(const std::string verbosityLevel)
@@ -41,7 +41,7 @@ bool Logger::isEnoughVerbosity(const std::string verbosityLevel)
 {
   size_t messageLevel = getVerbosityLevel(verbosityLevel);
 
-  if (messageLevel <= __verbosityLevel) return true;
+  if (messageLevel <= _verbosityLevel) return true;
   return false;
 }
 
@@ -54,8 +54,8 @@ void Logger::logData(const std::string verbosityLevel, const char *format, ...)
   va_start(ap, format);
   vasprintf(&outstr, format, ap);
 
-  fprintf(__outputFile, "%s", outstr);
-  fflush(__outputFile);
+  fprintf(_outputFile, "%s", outstr);
+  fflush(_outputFile);
   free(outstr);
 }
 
@@ -71,8 +71,8 @@ void Logger::logInfo(const std::string verbosityLevel, const char *format, ...)
   va_start(ap, format);
   vasprintf(&outstr, newFormat.c_str(), ap);
 
-  fprintf(__outputFile, "%s", outstr);
-  fflush(__outputFile);
+  fprintf(_outputFile, "%s", outstr);
+  fflush(_outputFile);
   free(outstr);
 }
 
@@ -88,15 +88,15 @@ void Logger::logWarning(const std::string verbosityLevel, const char *format, ..
   va_start(ap, format);
   vasprintf(&outstr, newFormat.c_str(), ap);
 
-  if (__outputFile == stdout)
+  if (_outputFile == stdout)
   {
     fprintf(stderr, "%s", outstr);
     fflush(stderr);
   }
   else
   {
-    fprintf(__outputFile, "%s", outstr);
-    fflush(__outputFile);
+    fprintf(_outputFile, "%s", outstr);
+    fflush(_outputFile);
   }
 
   free(outstr);

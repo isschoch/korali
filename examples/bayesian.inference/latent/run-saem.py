@@ -36,12 +36,14 @@ def main():
   k = korali.Engine()
   e = korali.Experiment()
 
-  e["Problem"]["Type"] = "Bayesian/Latent"
+  e["Problem"]["Type"] = "Bayesian/Latent/ExponentialLatent"
   e["Problem"]["S Of Likelihood Model"] = distrib1_S
   e["Problem"]["Zeta Of Likelihood Model"] = distrib1_zeta
   e["Problem"]["Phi Of Likelihood Model"] = distrib1_phi
   e["Problem"]["S Dimension"] = 1
-  e["Problem"]["Latent Variable Sampler"] = lambda sample: gaussian_sampler_obj.sampleLatent(sample)
+  e["Problem"][
+      "Latent Variable Sampler"] = lambda sample: gaussian_sampler_obj.sampleLatent(
+          sample)
 
   e["Solver"]["Type"] = "SAEM"
   e["Solver"]["Number Samples Per Step"] = 10

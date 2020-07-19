@@ -1,0 +1,93 @@
+#ifndef _KORALI_AGENT_DQN_HPP_
+#define _KORALI_AGENT_DQN_HPP_
+
+#include "modules/problem/supervisedLearning/supervisedLearning.hpp"
+#include "modules/solver/agent/agent.hpp"
+#include "modules/solver/learner/deepGD/deepGD.hpp"
+#include "modules/solver/learner/learner.hpp"
+#include <algorithm> // std::shuffle
+#include <random>
+
+namespace korali
+{
+namespace solver
+{
+namespace agent
+{
+class DQN : public Agent
+{
+  public:
+  /**
+ * @brief Korali engine for running internal experiments
+ */
+  korali::Engine _engine;
+
+  /**
+   * @brief Random device for the generation of shuffling numbers
+   */
+  std::random_device rd;
+
+  /**
+  * @brief Mersenne twister for the generation of shuffling numbers
+  */
+  std::mt19937 *mt;
+
+  /**
+   * @brief Pointer to training experiment's problem
+   */
+  problem::SupervisedLearning *_qTrainingProblem;
+
+  /**
+  * @brief Pointer to training experiment's learner
+  */
+  learner::DeepGD *_qTrainingLearner;
+
+  /**
+   * @brief Pointer to inference experiment's learner
+   */
+  learner::DeepGD *_qInferenceLearner;
+
+  /**
+ * @brief Korali experiment for the estimation of Q values
+ */
+  korali::Experiment _qInferenceExperiment;
+
+  /**
+   * @brief Korali experiment for the training of the Qvalue-estimator
+   */
+  korali::Experiment _qTrainingExperiment;
+
+  /**
+  * @brief Learner to use for the inference of actions
+  */
+  learner::DeepGD *_learner;
+
+  /**
+ * @brief Korali experiment for argmax_action(Q) based on a trained Q-Network
+ */
+  korali::Experiment _argMaxActionExperiment;
+
+  /**
+ * @brief Vector of the current state to use for action optimization
+ */
+  std::vector<double> _currentState;
+
+  /**
+   * @brief Function to evaluate the Q* of a given action
+   * @param sample Sample containing the action to evaluate
+   * @param getGradients Indicates whether the gradients are required
+   */
+  void evaluateAction(Sample &sample, bool getGradients);
+
+  void updatePolicy() override;
+  std::vector<double> getAction(const std::vector<double> &state) override;
+  void getAction(Sample &sample) override;
+  void printGenerationAfter() override;
+  void initialize() override;
+};
+
+} // namespace agent
+} // namespace solver
+} // namespace korali
+
+#endif // _KORALI_AGENT_DQN_HPP_

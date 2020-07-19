@@ -21,19 +21,13 @@ void Sequential::processSample(Sample &sample)
   auto js = knlohmann::json();
   js["Start Time"] = chrono::duration<double>(chrono::high_resolution_clock::now() - _startTime).count() + _cumulativeTime;
 
-  engine->_engineSample = &sample;
-  initiateSample(sample._js.getJson());
+  sample._globals = &_globals;
+  sample.sampleLauncher();
 
   js["End Time"] = chrono::duration<double>(chrono::high_resolution_clock::now() - _startTime).count() + _cumulativeTime;
   js["Current Generation"] = engine->_currentExperiment->_currentGeneration;
   js["Solver Id"] = engine->_currentExperiment->_experimentId;
   __profiler["Timelines"]["Worker 0"] += js;
-}
-
-void Sequential::update(Sample &sample)
-{
-  Engine *engine = _engineStack.top();
-  engine->_engineSample->_js.getJson() = sample._js.getJson();
 }
 
 void Sequential::broadcastGlobals(knlohmann::json &globalsJs)

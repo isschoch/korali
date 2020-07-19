@@ -1,0 +1,43 @@
+#ifndef _KORALI_LEARNER_HPP_
+#define _KORALI_LEARNER_HPP_
+
+#include "engine.hpp"
+#include "modules/solver/solver.hpp"
+
+namespace korali
+{
+namespace solver
+{
+class Learner : public Solver
+{
+  public:
+  /**
+   * @brief For solver modules which have been trained, test returns an infered output batch, from a batch of inputs to process.
+   * @param inputBatch The inputs from which to infer outputs.
+   * @return The inferred outputs
+  */
+  virtual std::vector<std::vector<double>> getEvaluation [[noreturn]] (const std::vector<std::vector<double>> &inputBatch);
+
+  /**
+  * @brief For solver modules which have been trained, return the gradient of a differentiated output
+  * @param outputDiffs Output differentials
+  * @return The calculated gradients
+  */
+  virtual std::vector<std::vector<double>> getGradients [[noreturn]] (const std::vector<std::vector<double>> &outputDiffs);
+
+  /**
+  * @brief Returns the hyperparameters required to produce new evaluations and gradients
+  * @return The hyperparameters
+  */
+  virtual knlohmann::json &getHyperparameters() = 0;
+
+  /**
+  * @brief Sets the hyperparameters required to produce new evaluations and gradients
+  * @param parameters The hyperparameters to use
+  */
+  virtual void setHyperparameters(const knlohmann::json &parameters) = 0;
+};
+} // namespace solver
+} // namespace korali
+
+#endif // _KORALI_LEARNER_HPP_

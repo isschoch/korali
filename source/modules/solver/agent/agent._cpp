@@ -1,0 +1,180 @@
+#include "modules/solver/agent/agent.hpp"
+
+namespace korali
+{
+namespace solver
+{
+void Agent::initialize()
+{
+  // Getting problem pointer
+  _problem = dynamic_cast<problem::ReinforcementLearning *>(_k->_problem);
+
+  // Checking inputs
+  for (size_t i = 0; i < _problem->_actionVectorSize; i++)
+  {
+    size_t varIdx = _problem->_actionVectorIndexes[i];
+
+    // If value vector has not been provided, check for bound correctness.
+    if (_k->_variables[varIdx]->_values.size() == 0)
+    {
+      if (std::isfinite(_k->_variables[varIdx]->_lowerBound) == false)
+        KORALI_LOG_ERROR("Lower bound for action variable %lu must be finite, but is %f instead.\n", i, _k->_variables[varIdx]->_lowerBound);
+
+      if (std::isfinite(_k->_variables[varIdx]->_upperBound) == false)
+        KORALI_LOG_ERROR("Upper bound for action variable %lu must be finite, but is %f instead.\n", i, _k->_variables[varIdx]->_upperBound);
+
+      if (_k->_variables[varIdx]->_lowerBound >= _k->_variables[varIdx]->_upperBound)
+        KORALI_LOG_ERROR("Lower Bound (%f) for action variable %lu must be strictly smaller than its upper bound (%f).\n", _k->_variables[varIdx]->_lowerBound, i, _k->_variables[varIdx]->_upperBound);
+    }
+  }
+}
+
+void Agent::runGeneration()
+{
+  // Creating storage for agents
+  std::vector<Sample> agents(_episodesPerGeneration);
+  _currentEpisode += _episodesPerGeneration;
+
+  // Initializing the agents and their environments
+  for (size_t i = 0; i < _episodesPerGeneration; i++)
+  {
+    // Configuring Agent
+    agents[i]["Sample Id"] = i;
+    agents[i]["Module"] = "Problem";
+    agents[i]["Operation"] = "Run Environment";
+
+    // Launching agent initialization
+    _conduit->start(agents[i]);
+  }
+
+  _conduit->waitAll(agents);
+
+  /*********************************************************************
+   * Storing new experiences to the history
+   *********************************************************************/
+
+  size_t currentExperienceCount = 0;
+
+  _maxExperienceCount = 0;
+  _minExperienceCount = std::numeric_limits<size_t>::max();
+
+  // Calculating the cumulative reward of this round of experiences
+  double cumulativeReward = 0.0;
+
+  for (size_t i = 0; i < _episodesPerGeneration; i++)
+  {
+    size_t experienceSize = agents[i]["Experience"]["States"].size();
+
+    // Storing statistics
+    currentExperienceCount += experienceSize;
+    if (experienceSize > _maxExperienceCount) _maxExperienceCount = experienceSize;
+    if (experienceSize < _minExperienceCount) _minExperienceCount = experienceSize;
+
+    size_t startExpId = experienceSize > _agentHistorySize ? experienceSize - _agentHistorySize : 0;
+
+    for (size_t j = startExpId; j < experienceSize; j++)
+    {
+      // Storing action and state experience
+      _stateHistory.push_back(agents[i]["Experience"]["States"][j].get<std::vector<double>>());
+      _actionHistory.push_back(agents[i]["Experience"]["Actions"][j].get<std::vector<double>>());
+
+      // Storing reward
+      double reward = agents[i]["Experience"]["Rewards"][j].get<double>();
+      _rewardHistory.push_back(reward);
+      cumulativeReward += reward;
+
+      // If not a terminal state, store the next state
+      if (j < agents[i]["Experience"]["States"].size() - 1)
+        _nextStateHistory.push_back(agents[i]["Experience"]["States"][j + 1].get<std::vector<double>>());
+      else // Otherwise, store an empty next state
+        _nextStateHistory.push_back({});
+    }
+  }
+
+  // Updating best reward so far, it the cumulative reward of this round exceeds it
+  // and store the best hyperparameters used for that
+  _averageReward = cumulativeReward / (double)_episodesPerGeneration;
+  if (_averageReward > _bestAverageReward)
+  {
+    _bestAverageReward = _averageReward;
+    _bestHyperparameters = _hyperparameters;
+    _suboptimalStepCounter = 0;
+  }
+  else
+  {
+    // If not better, then increase the suboptimal step counter
+    _suboptimalStepCounter++;
+  }
+
+  // Updating average experience count
+  _totalExperienceCount += currentExperienceCount;
+  _averageExperienceCount = ((double)currentExperienceCount) / ((double)_episodesPerGeneration);
+
+  // If the maximum number of experiences have been reached, start forgetting excess experiences
+  if (_stateHistory.size() > _replayMemoryMaximumSize)
+  {
+    size_t excess = _stateHistory.size() - _replayMemoryMaximumSize;
+
+    if (_replayMemoryReplacementPolicy == "Least Recently Added")
+    {
+      _stateHistory.erase(_stateHistory.begin(), _stateHistory.begin() + excess);
+      _actionHistory.erase(_actionHistory.begin(), _actionHistory.begin() + excess);
+      _rewardHistory.erase(_rewardHistory.begin(), _rewardHistory.begin() + excess);
+      _nextStateHistory.erase(_nextStateHistory.begin(), _nextStateHistory.begin() + excess);
+    }
+
+    if (_replayMemoryReplacementPolicy == "Uniform")
+    {
+      for (size_t i = 0; i < excess; i++)
+      {
+        double x = _uniformGenerator->getRandomNumber();
+        size_t expId = floor(x * _stateHistory.size());
+
+        _stateHistory.erase(_stateHistory.begin() + expId);
+        _actionHistory.erase(_actionHistory.begin() + expId);
+        _rewardHistory.erase(_rewardHistory.begin() + expId);
+        _nextStateHistory.erase(_nextStateHistory.begin() + expId);
+      }
+    }
+  }
+
+  // If the minimum number of experiences have been reached update the algorithm-specific method
+  if (_stateHistory.size() >= _replayMemoryStartSize) updatePolicy();
+}
+
+void Agent::printGenerationAfter()
+{
+  _k->_logger->logInfo("Normal", "Experience Statistics:\n");
+
+  if (_maxEpisodes > 0)
+    _k->_logger->logInfo("Normal", " + Total Episodes Count:            %lu/%lu\n", _currentEpisode, _maxEpisodes);
+  else
+    _k->_logger->logInfo("Normal", " + Total Episodes Count:            %lu\n", _currentEpisode);
+
+  if (_maxExperiences > 0)
+    _k->_logger->logInfo("Normal", " + Total Experience Count:          %lu/%lu\n", _totalExperienceCount, _maxExperiences);
+  else
+    _k->_logger->logInfo("Normal", " + Total Experience Count:          %lu\n", _totalExperienceCount);
+
+  _k->_logger->logInfo("Normal", " + Current Max Experiences/Episode: %lu\n", _maxExperienceCount);
+  _k->_logger->logInfo("Normal", " + Current Avg Experiences/Episode: %.0f\n", _averageExperienceCount);
+  _k->_logger->logInfo("Normal", " + Current Min Experiences/Episode: %lu\n", _minExperienceCount);
+
+  _k->_logger->logInfo("Normal", "Reward Statistics:\n");
+
+  _k->_logger->logInfo("Normal", " + Average Reward:                  %f\n", _averageReward);
+
+  if (_targetAverageReward > -korali::Inf)
+    _k->_logger->logInfo("Normal", " + Best Average Reward:             %f/%f\n", _bestAverageReward, _targetAverageReward);
+  else
+    _k->_logger->logInfo("Normal", " + Best Average Reward:             %f\n", _bestAverageReward);
+
+  if (_maxSuboptimalSteps > 0)
+    _k->_logger->logInfo("Normal", " + Steps with Suboptimal Reward:    %lu/%lu\n", _suboptimalStepCounter, _maxSuboptimalSteps);
+  else
+    _k->_logger->logInfo("Normal", " + Steps with Suboptimal Reward:    %lu\n", _suboptimalStepCounter);
+}
+
+} // namespace solver
+
+} // namespace korali

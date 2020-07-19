@@ -32,22 +32,10 @@ class Conduit : public Module
   virtual void initServer(){};
 
   /**
-  * @brief Indicates how many samples can be evaluated concurrently.
-  * @return Maximum number of workers.
-  */
-  virtual size_t maxConcurrency() { return 1; };
-
-  /**
  * @brief Determines whether the caller rank/thread/process is root.
  * @return True, if it is root; false, otherwise.
  */
   virtual bool isRoot() { return true; }
-
-  /**
- * @brief Starts the execution of a sample on the worker side with its own coroutine.
- * @param sampleJs JSON object with the sample information
- */
-  void initiateSample(knlohmann::json &sampleJs);
 
   /**
  * @brief broadcast global information for all workers to have when processing a sample. Useful for Korali-in-Korali solvers.
@@ -84,12 +72,6 @@ class Conduit : public Module
   * @return Position in the vector of the sample that has finished.
   */
   size_t waitAny(std::vector<Sample> &samples);
-
-  /**
- * @brief Sends sample information back to engine
- * @param sample Sample to send back
- */
-  virtual void update(Sample &sample) = 0;
 
   /**
   * @brief Stacks a new Engine into the engine stack

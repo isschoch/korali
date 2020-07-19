@@ -17,11 +17,6 @@ namespace korali
 class NeuralNetwork : public Module
 {
   public:
-  /**
-  * @brief Flag that indicates whether the oneDNN structures have been initialized
-  */
-  bool _isInitialized;
-
 #ifdef _KORALI_USE_ONEDNN
   /**
    * @brief oneDNN Engine
@@ -33,42 +28,41 @@ class NeuralNetwork : public Module
    */
   dnnl::stream _stream;
 
+  /**
+   * @brief Flag to remember the batch size of the input
+   */
+  size_t _batchSize;
+
+  /**
+   * @brief Flag to make sure the NN is initialized before creating
+   */
+  bool _isInitialized;
+
 #endif
-
-  /**
-  * @brief Model function to evaluate the proposed NN configuration
-  * @param sample The sample containing proposal configuration
-  * @param nn Pointer to the neural network
-  */
-  static void runSample(korali::Sample &sample, korali::NeuralNetwork *nn);
-
-  /**
- * @brief Korali engine for optimizing the NN's weights and biases
- */
-  korali::Engine _koraliEngine;
-
-  /**
- * @brief Korali engine for optimizing the NN's weights and biases
- */
-  korali::Experiment _koraliExperiment;
 
   void initialize() override;
 
   /**
-   * @brief Performs the training phase of the NN, given a solution and the NN's configuration.
-   * @param stepsToRun The number of generations of the optimizer to run.
+   * @brief Initializes the internal memory structures for the forward pipeline
+   * @param batchSize The size of the input batch for which the NN has to be created
    */
-  void train(const size_t stepsToRun = 1);
+  void createForwardPipeline(size_t batchSize);
 
   /**
-   * @brief Initializes the internal memory structures, with regards to the layer configuration of the network
-   */
-  void create();
+  * @brief Initializes the internal memory structures for the backward pipeline
+  */
+  void createBackwardPipeline();
 
   /**
-   * @brief Updates the values of weights, biases, and inputs to the NN
+   * @brief Updates the internal values of the NN inputs
+   * @param input The input batch
    */
-  void updateWeightsAndBias();
+  void setInput(const std::vector<std::vector<double>> &input);
+
+  /**
+   * @brief Updates the values of weights, biases, and normalization scale/shift configuration to the NN
+   */
+  void updateWeightsBiasAndNormalization();
 
   /**
    * @brief Forward-propagates the input batch data through the network.
@@ -76,9 +70,21 @@ class NeuralNetwork : public Module
   void forward();
 
   /**
-   * @brief Forward-propagates to find out the gradients of the weights and biases.
+   * @brief Backward-propagates to find out the gradients of the weights and biases.
+   * @param outputDifferential The differential of the output wrt the solution
   */
-  void backward();
+  void backwardWeightsAndBias(std::vector<float> &outputDifferential);
+
+  /**
+   * @brief Backward-propagates to find out the gradients of the input data.
+   * @param outputDifferential The differential of the output wrt the solution
+  */
+  void backwardData(std::vector<float> &outputDifferential);
+
+  /**
+   * @brief Creator that sets initialized flag to false
+   */
+  NeuralNetwork();
 };
 
 } // namespace korali

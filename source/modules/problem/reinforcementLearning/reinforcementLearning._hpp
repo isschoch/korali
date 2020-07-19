@@ -1,6 +1,7 @@
 #ifndef _KORALI_PROBLEM_REINFORCEMENT_LEARNING_HPP_
 #define _KORALI_PROBLEM_REINFORCEMENT_LEARNING_HPP_
 
+#include "modules/neuralNetwork/neuralNetwork.hpp"
 #include "modules/problem/problem.hpp"
 
 namespace korali
@@ -17,50 +18,6 @@ class ReinforcementLearning : public korali::Problem
    * @param sample Sample containing current agent/state information.
    */
   void runEnvironment(korali::Sample &sample);
-
-  /**
-  * @brief Gets an action vector from a given index
-  * @param index The action index
-  * @return The action values
-  */
-  std::vector<double> getActionFromIndex(const size_t &index);
-
-  /**
-  * @brief Gets a state vector from a given index
-  * @param index The state index
-  * @return The state values
-  */
-  std::vector<double> getStateFromIndex(const size_t &index);
-
-  /**
-  * @brief Interpolates an action index from a given value vector
-  * @param values The action values
-  * @return The action index
-  */
-  size_t getIndexFromAction(const std::vector<double> &values);
-
-  /**
-  * @brief Interpolates a state index from a given value vector
-  * @param values The state values
-  * @return The state index
-  */
-  size_t getIndexFromState(const std::vector<double> &values);
-
-  /**
-  * @brief Extrapolates the index from a given value vector and variable-index collection
-  * @param index The index to extrapolate
-  * @param variableIndexVector The vector holding the variable indexes
-  * @return The extrapolates values
-  */
-  std::vector<double> extrapolateValuesFromIndex(const size_t &index, const std::vector<size_t> &variableIndexVector);
-
-  /**
-  * @brief Interpolates the index from a set of values and variable-index collection
-  * @param values The values to interpolate
-  * @param variableIndexVector The vector holding the variable indexes
-  * @return The interpolated index
-  */
-  size_t interpolateIndexFromValues(const std::vector<double> &values, const std::vector<size_t> &variableIndexVector);
 };
 
 } // namespace problem

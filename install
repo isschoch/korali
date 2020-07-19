@@ -55,7 +55,8 @@ function check()
 INSTALLREQS=0
 NJOBS=4
 WARNINGFLAGS=
-OPTFLAGS="-O3"
+OPTFLAGS="-O3 -DNDEBUG"
+DEBUG=0
 
 for i in "$@"
 do
@@ -70,6 +71,7 @@ case $i in
     ;;
     --debug)
     OPTFLAGS="-O0"
+    DEBUG=1
     shift 
     ;;
     --jobs=*)
@@ -292,12 +294,28 @@ if [ $? -ne 0 ]; then
 
   if [ $INSTALLREQS -eq 0 ]; then
    logEcho "[Korali] Error: pybind11 not found, trying to install it automatically."
-   logEcho "[Korali] Solution: Run \"./install\"."
+   logEcho "[Korali] Solution: Try running \"python3 -m pip install pybind11 --user\"."
    exitWithError
   fi
   
   logEcho "[Korali] pybind11 not found, trying to install it automatically."
   python3 -m pip install $PIP_USER pybind11 >> $logFile 2>&1; check
+fi
+
+######## Checking support for openAI Gym ########
+
+log "[Korali] Checking for openAI Gym using \"python3 -c \"import gym\"\"..."
+python3 -c "import gym" >> $logFile 2>&1
+if [ $? -ne 0 ]; then
+
+  if [ $INSTALLREQS -eq 0 ]; then
+   logEcho "[Korali] Error: openAI Gym not found, trying to install it automatically."
+   logEcho "[Korali] Solution: Try running \"python3 -m pip install gym --user\"."
+   exitWithError
+  fi
+  
+  logEcho "[Korali] openAI Gym not found, trying to install it automatically."
+  python3 -m pip install $PIP_USER gym >> $logFile 2>&1; check
 fi
 
 ######## Determining Library Flags ########
@@ -329,7 +347,12 @@ GSLLIBS=`./external/gsl-config --libs`; check
 GSLLIBS="${GSLLIBS} -L${GSLPREFIX}/lib -Wl,-rpath -Wl,${GSLPREFIX}/lib -L${GSLPREFIX}/lib64 -Wl,-rpath -Wl,${GSLPREFIX}/lib64"
 
 PYBIND11INCLUDES=`python3 -m pybind11 --includes` ; check
-PYBIND11LIBS=`python3-config --ldflags`; check
+# try python3.8 first (see ABI changes https://docs.python.org/3/whatsnew/3.8.html)
+PYTHONLIBS=`python3-config --ldflags --embed`
+if [[ $? -ne 0 ]]; then
+    # fallback
+    PYTHONLIBS=`python3-config --ldflags`; check
+fi
 
 CXXARCH="-std=c++17"
 which $USE_CXX | grep "cray" >> $logFile 2>&1
@@ -339,7 +362,7 @@ if [ $? -eq 0 ]; then
   if [ $? -eq 0 ]; then
    logEcho "[Korali] Detected Cray compiler."
    CXXARCH="-hstd=c++17"
-   PYBIND11LIBS=`echo $PYBIND11LIBS | sed 's/-Xlinker//g' | sed 's/-export-dynamic//g'`
+   PYTHONLIBS=`echo $PYTHONLIBS | sed 's/-Xlinker//g' | sed 's/-export-dynamic//g'`
   fi
 fi
 
@@ -383,7 +406,7 @@ echo GSLCFLAGS=$GSLCFLAGS >> source/Makefile.conf
 echo GSLLIBS=$GSLLIBS  >> source/Makefile.conf
 
 echo PYBIND11INCLUDES=$PYBIND11INCLUDES >> source/Makefile.conf 
-echo PYBIND11LIBS=$PYBIND11LIBS >> source/Makefile.conf
+echo PYTHONLIBS=$PYTHONLIBS >> source/Makefile.conf
 
 ######## Compiling Korali C++ Engine #########
 
@@ -418,6 +441,10 @@ cp source/libkorali.so . >> $logFile 2>&1
 if [ $? -ne 0 ]; then
   logEcho "[Korali] Error obtaining libkorali.so"
   exitWithError
+fi
+if [ $DEBUG -eq 0 ]; then
+    # strip symbols is not debug build
+    strip libkorali.so
 fi
 
 

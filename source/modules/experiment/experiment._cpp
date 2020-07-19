@@ -6,6 +6,8 @@
 #include "modules/conduit/distributed/distributed.hpp"
 #include "modules/experiment/experiment.hpp"
 #include "modules/problem/problem.hpp"
+#include "modules/solver/agent/agent.hpp"
+#include "modules/solver/learner/learner.hpp"
 #include "modules/solver/solver.hpp"
 #include <chrono>
 #include <cstdio>
@@ -46,6 +48,7 @@ void Experiment::run()
 
   _currentGeneration++;
 
+  _solver->_terminationCriteria.clear();
   while (_solver->checkTermination() == false)
   {
     if (_consoleOutputFrequency > 0)
@@ -61,7 +64,6 @@ void Experiment::run()
 
     // Timing and Profiling Start
     auto t0 = std::chrono::system_clock::now();
-
     _solver->runGeneration();
 
     // Timing and Profiling End
@@ -118,18 +120,52 @@ void Experiment::saveState()
   if (_storeSampleInformation == true) _js["Samples"] = _sampleInfo["Samples"];
 
   char genFileName[256];
-  sprintf(genFileName, "gen%08lu.json", _currentGeneration);
 
-  std::string fileName = "./" + _fileOutputPath + "/" + genFileName;
-  std::string linkName = "./" + _fileOutputPath + "/latest";
+  // Removing keys in the exclusion list
+  for (size_t i = 0; i < _fileOutputExcludedKeys.size(); i++)
+  {
+    bool foundKey = true;
+    auto currentJs = &_js.getJson();
+    auto prevJs = currentJs;
 
-  if (saveJsonToFile(fileName.c_str(), _js.getJson()) != 0)
-    KORALI_LOG_ERROR("Error trying to save result file: %s.\n", fileName.c_str());
+    for (size_t j = 0; j < _fileOutputExcludedKeys[i].size(); j++)
+    {
+      if (isDefined(*currentJs, _fileOutputExcludedKeys[i][j]))
+      {
+        prevJs = currentJs;
+        currentJs = &((*currentJs)[_fileOutputExcludedKeys[i][j]]);
+      }
+      else
+      {
+        foundKey = false;
+        break;
+      }
+    }
+    if (foundKey)
+    {
+      eraseValue(*prevJs, _fileOutputExcludedKeys[i][_fileOutputExcludedKeys[i].size() - 1]);
+    }
+  }
 
-  remove(linkName.c_str());
+  // If filename not given, assign gen + genId
+  if (_fileOutputName == "")
+    sprintf(genFileName, "gen%08lu.json", _currentGeneration);
+  else
+    sprintf(genFileName, "%s", _fileOutputName.c_str());
 
-  if (link(fileName.c_str(), linkName.c_str()) != 0)
-    KORALI_LOG_ERROR("Could not create hard link to latest result.\n + Target: %s\n + Link: %s\n", fileName.c_str(), linkName.c_str());
+  // If results directory doesn't exist, create it
+  if (!dirExists(_fileOutputPath)) mkdir(_fileOutputPath);
+
+  std::string filePath = "./" + _fileOutputPath + "/" + genFileName;
+  std::string linkPath = "./" + _fileOutputPath + "/latest";
+
+  if (saveJsonToFile(filePath.c_str(), _js.getJson()) != 0)
+    KORALI_LOG_ERROR("Error trying to save result file: %s.\n", filePath.c_str());
+
+  remove(linkPath.c_str());
+
+  if (link(filePath.c_str(), linkPath.c_str()) != 0)
+    KORALI_LOG_ERROR("Could not create hard link to latest result.\n + Target: %s\n + Link: %s\n", filePath.c_str(), linkPath.c_str());
 }
 
 bool Experiment::loadState(const std::string &path)
@@ -146,45 +182,82 @@ Experiment::Experiment()
 {
   _runID = getTimehash();
   _k = this;
+  _isInitialized = false;
 }
 
 void Experiment::initialize()
 {
-  // Clearning sample and previous result information
-  _js["Results"] = knlohmann::json();
-  _js["Samples"] = knlohmann::json();
-
-  // Initializing Variables
-  _variables.resize(_js["Variables"].size());
-  for (size_t i = 0; i < _js["Variables"].size(); i++) _variables[i] = new Variable;
-
-  applyModuleDefaults(_js.getJson());
-
-  try
-  {
-    setConfiguration(_js.getJson());
-  }
-  catch (const std::exception &e)
-  {
-    KORALI_LOG_ERROR("Error parsing Experiment's configuration. Reason:\n%s", e.what());
-  }
-
-  getConfiguration(_js.getJson());
   __expPointer = this;
   _thread = co_create(1 << 20, threadWrapper);
   __returnThread = co_active();
   co_switch(_thread);
+
+  if (_isInitialized == false)
+  {
+    // Clearning sample and previous result information
+    _js["Results"] = knlohmann::json();
+    _js["Samples"] = knlohmann::json();
+
+    // Initializing Variables
+    if (isDefined(_js.getJson(), "Variables"))
+    {
+      _variables.resize(_js["Variables"].size());
+      for (size_t i = 0; i < _js["Variables"].size(); i++) _variables[i] = new Variable;
+    }
+
+    applyModuleDefaults(_js.getJson());
+
+    try
+    {
+      setConfiguration(_js.getJson());
+    }
+    catch (const std::exception &e)
+    {
+      KORALI_LOG_ERROR("Error parsing Experiment's configuration. Reason:\n%s", e.what());
+    }
+
+    getConfiguration(_js.getJson());
+
+    _logger = new Logger(_consoleOutputVerbosity, stdout);
+
+    _isInitialized = true;
+  }
+
+  if (isDefined(_js.getJson(), "Solver", "Termination Criteria", "Max Generations"))
+    _solver->_maxGenerations = _js["Solver"]["Termination Criteria"]["Max Generations"].get<size_t>();
 }
 
 void Experiment::finalize()
 {
-  for (size_t i = 0; i < _variables.size(); i++) delete _variables[i];
+  //for (size_t i = 0; i < _variables.size(); i++) delete _variables[i];
   co_delete(_thread);
 }
 
-std::vector<std::vector<double>> Experiment::evaluate(const std::vector<std::vector<double>> &inputBatch)
+std::vector<double> Experiment::getAction(const std::vector<double> &state)
 {
-  return _k->_solver->evaluate(inputBatch);
+  auto agent = dynamic_cast<solver::Agent *>(_k->_solver);
+  if (agent != NULL)
+    return agent->getAction(state);
+  else
+    KORALI_LOG_ERROR("This solver does not support getAction operations.\n");
+}
+
+std::vector<std::vector<double>> Experiment::getEvaluation(const std::vector<std::vector<double>> &inputBatch)
+{
+  auto learner = dynamic_cast<solver::Learner *>(_k->_solver);
+  if (learner != NULL)
+    return learner->getEvaluation(inputBatch);
+  else
+    KORALI_LOG_ERROR("This solver does not support evaluation operations.\n");
+}
+
+std::vector<std::vector<double>> Experiment::getGradients(const std::vector<std::vector<double>> &outputDiffs)
+{
+  auto learner = dynamic_cast<solver::Learner *>(_k->_solver);
+  if (learner != NULL)
+    return learner->getGradients(outputDiffs);
+  else
+    KORALI_LOG_ERROR("This solver does not provide gradients.\n");
 }
 
 knlohmann::json &Experiment::operator[](const std::string &key) { return _js[key]; }

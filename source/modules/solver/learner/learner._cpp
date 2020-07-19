@@ -1,0 +1,19 @@
+#include "modules/solver/learner/learner.hpp"
+
+namespace korali
+{
+namespace solver
+{
+std::vector<std::vector<double>> Learner::getEvaluation [[noreturn]] (const std::vector<std::vector<double>> &inputBatch)
+{
+  KORALI_LOG_ERROR("This solver does not provide an evaluate operation.\n");
+}
+
+std::vector<std::vector<double>> Learner::getGradients [[noreturn]] (const std::vector<std::vector<double>> &outputDiffs)
+{
+  KORALI_LOG_ERROR("This solver does not provide a getGradients operation.\n");
+}
+
+} // namespace solver
+
+} // namespace korali

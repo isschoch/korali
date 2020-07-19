@@ -8,46 +8,7 @@ namespace korali
 Conduit *_conduit = NULL;
 
 /***********************************
- * Worker-Side Operations
- **********************************/
-
-void Conduit::initiateSample(knlohmann::json &sampleJs)
-{
-  size_t experimentId = sampleJs["Experiment Id"];
-  size_t sampleId = sampleJs["Sample Id"];
-
-  Engine *engine = _engineStack.top();
-  engine->_currentWorker = this;
-  engine->_workerThread = co_active();
-
-  auto experiment = engine->_experimentVector[experimentId];
-
-  // Finding associated coroutine
-  auto it = experiment->sampleIdMap.find(sampleId);
-
-  if (it == experiment->sampleIdMap.end())
-  {
-    sampleJs["Finished"] = false;
-    sampleJs["Globals"] = _globals;
-    experiment->sampleIdMap[sampleId] = new Sample;
-    experiment->sampleIdMap[sampleId]->_sampleThread = co_create(1 << 30, Sample::sampleLauncher);
-  }
-
-  experiment->sampleIdMap[sampleId]->_js.getJson() = sampleJs;
-  engine->_currentSample = experiment->sampleIdMap[sampleId];
-
-  co_switch(engine->_currentSample->_sampleThread);
-
-  if ((*experiment->sampleIdMap[sampleId])["Finished"] == true)
-  {
-    co_delete(experiment->sampleIdMap[sampleId]->_sampleThread);
-    delete (experiment->sampleIdMap[sampleId]);
-    experiment->sampleIdMap.erase(sampleId);
-  }
-}
-
-/***********************************
- * Worker-Side Operations
+ * Engine-Side Operations
  **********************************/
 
 void Conduit::coroutineWrapper()
@@ -76,7 +37,7 @@ void Conduit::start(Sample &sample)
   if (sample._state != SampleState::uninitialized) KORALI_LOG_ERROR("Sample has already been initialized.\n");
 
   if (sample._isAllocated == false)
-    sample._sampleThread = co_create(1 << 24, Conduit::coroutineWrapper);
+    sample._sampleThread = co_create(1 << 28, Conduit::coroutineWrapper);
   else
     KORALI_LOG_ERROR("Sample thread is already allocated; has it executed before being re-started?\n");
 

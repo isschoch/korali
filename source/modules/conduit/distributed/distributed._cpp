@@ -105,19 +105,6 @@ void Distributed::initServer()
 #endif
 }
 
-void Distributed::update(Sample &sample)
-{
-#ifdef _KORALI_USE_MPI
-  if (_localRankId == 0)
-  {
-    string resultJsonString = sample._js.getJson().dump();
-    size_t resultJsonSize = resultJsonString.size();
-    MPI_Send(&resultJsonSize, 1, MPI_UNSIGNED_LONG, getRootRank(), MPI_TAG_ACTION_JSON_SIZE, _mpiCommunicator);
-    MPI_Send(resultJsonString.c_str(), resultJsonSize, MPI_CHAR, getRootRank(), MPI_TAG_ACTION_JSON_CONTENT, _mpiCommunicator);
-  }
-#endif
-}
-
 void Distributed::finalize()
 {
 #ifdef _KORALI_USE_MPI
@@ -160,7 +147,20 @@ void Distributed::workerThread()
     auto actionJs = knlohmann::json::parse(jsonStringChar);
 
     if (actionJs["Conduit Action"] == "Terminate") return;
-    if (actionJs["Conduit Action"] == "Process Sample") initiateSample(actionJs);
+    if (actionJs["Conduit Action"] == "Process Sample")
+    {
+      Sample s;
+      s._globals = &_globals;
+      s._js.getJson() = actionJs;
+      s.sampleLauncher();
+      if (_localRankId == 0)
+      {
+        string resultJsonString = s._js.getJson().dump();
+        size_t resultJsonSize = resultJsonString.size();
+        MPI_Send(&resultJsonSize, 1, MPI_UNSIGNED_LONG, getRootRank(), MPI_TAG_ACTION_JSON_SIZE, _mpiCommunicator);
+        MPI_Send(resultJsonString.c_str(), resultJsonSize, MPI_CHAR, getRootRank(), MPI_TAG_ACTION_JSON_CONTENT, _mpiCommunicator);
+      }
+    }
     if (actionJs["Conduit Action"] == "Broadcast Globals") _globals = actionJs;
     if (actionJs["Conduit Action"] == "Stack Engine") _engineStack.push(Engine::deserialize(actionJs["Engine"]));
     if (actionJs["Conduit Action"] == "Pop Engine") _engineStack.pop();
@@ -177,20 +177,13 @@ void Distributed::processSample(Sample &sample)
 
   int teamId = -1;
 
-  if (isDefined(sample._js.getJson(), "Worker"))
+  while (_teamQueue.empty())
   {
-    teamId = sample["Worker"];
+    sample._state = SampleState::waiting;
+    co_switch(engine->_currentExperiment->_thread);
   }
-  else
-  {
-    while (_teamQueue.empty())
-    {
-      sample._state = SampleState::waiting;
-      co_switch(engine->_currentExperiment->_thread);
-    }
-    teamId = _teamQueue.front();
-    _teamQueue.pop();
-  }
+  teamId = _teamQueue.front();
+  _teamQueue.pop();
 
   auto sampleJs = sample._js.getJson();
   sampleJs["Conduit Action"] = "Process Sample";
@@ -236,13 +229,6 @@ void Distributed::processSample(Sample &sample)
   timelineJs["Current Generation"] = engine->_currentExperiment->_currentGeneration;
   __profiler["Timelines"]["Worker " + to_string(teamId)] += timelineJs;
 
-#endif
-}
-
-size_t Distributed::maxConcurrency()
-{
-#ifdef _KORALI_USE_MPI
-  return _teamCount;
 #endif
 }
 

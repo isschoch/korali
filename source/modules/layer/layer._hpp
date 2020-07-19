@@ -15,7 +15,7 @@ class Layer : public Module
 #ifdef _KORALI_USE_ONEDNN
 
   /********************************************************
-  * Declaring Layers's Memory Structures
+  * Declaring Layers's Memory Structures for Forward Propagation
   *******************************************************/
 
   /**
@@ -24,9 +24,19 @@ class Layer : public Module
   dnnl::memory _activationMem;
 
   /**
-   * @brief oneDNN Memory object descriptor to contain the result value of the neuron data of the layer
+   * @brief oneDNN Memory object descriptor to contain the result value of inner product (Wx+b) operation
    */
-  dnnl::memory _dataMem;
+  dnnl::memory _nodeMem;
+
+  /**
+   * @brief oneDNN Memory object descriptor to contain the result value of inner product (Wx+b) operation
+   */
+  dnnl::memory _batchNormalizationWorkMem;
+
+  /**
+   * @brief oneDNN Memory object descriptor to contain the result value of inner product (Wx+b) operation
+   */
+  dnnl::memory _batchNormalizationMem;
 
   /**
    * @brief oneDNN Memory object descriptor to contain the weights of inner product with incoming channels
@@ -43,19 +53,82 @@ class Layer : public Module
    */
   dnnl::memory _biasMem;
 
+  /********************************************************
+  * Declaring Layers's Memory Structures for Gradients
+  *******************************************************/
+
   /**
-   * @brief oneDNN Gradients of the operation wrt to Data
+   * @brief oneDNN Memory object descriptor to contain the gradient of the weights
    */
-  dnnl::memory _dataDiffMem;
+  dnnl::memory _weightsDiffMem;
+
+  /**
+   * @brief oneDNN Memory object descriptor to contain the gradient of the biases
+   */
+  dnnl::memory _biasDiffMem;
+
+  /**
+   * @brief oneDNN Gradient of the data at the inner product (Wx+b) stage
+   */
+  dnnl::memory _nodeDiffMem;
+
+  /*
+  * @brief oneDNN Gradient of the data at the normalization stage
+  */
+  dnnl::memory _batchNormalizationDiffMem;
 
   /*
   * @brief oneDNN Gradients of the operation wrt to activation function
   */
   dnnl::memory _activationDiffMem;
 
+  /*
+   * @brief oneDNN Gradients of the operation wrt to the layer normalization function
+   */
+  dnnl::memory _batchNormalizationScaleShiftDiffMem;
+
+  /*****************************************************************
+   * Declaring Layers's Forward Propagation Normalization
+   ******************************************************************/
+
+  /*
+   * @brief oneDNN Stores the mean of the normalized batch on this node
+   */
+  dnnl::memory _batchNormalizationMeanMem;
+
+  /*
+   * @brief oneDNN Stores the variance of the normalized batch on this node
+   */
+  dnnl::memory _batchNormalizationVarianceMem;
+
+  /*
+   * @brief oneDNN Provides the scale/shift values for each channel in the layer
+   */
+  dnnl::memory _batchNormalizationScaleShiftMem;
+
+  /**
+   * @brief oneDNN Arguments to the layer normalization operation
+   */
+  std::unordered_map<int, dnnl::memory> _forwardNormalizationArgs;
+
+  /**
+   * @brief oneDNN primitive attributes that describe the forward normalization operation
+   */
+  dnnl::batch_normalization_forward::primitive_desc _forwardNormalizationPrimitiveDesc;
+
+  /**
+  * @brief oneDNN primitive to perform forward layer normalization
+  */
+  dnnl::primitive _forwardNormalizationPrimitive;
+
   /*****************************************************************
   * Declaring Layers's Forward Activation Function Primitive Configuration
   ******************************************************************/
+
+  /**
+   * @brief oneDNN Algorithm chosen for activation function
+   */
+  dnnl::algorithm _activationAlgorithm;
 
   /**
    * @brief oneDNN Arguments to the activation function
@@ -124,6 +197,16 @@ class Layer : public Module
    * @brief oneDNN primitive for the backward propagation of the gradient wrt Weights and Biases
    */
   dnnl::primitive _backwardWeightsPrimitive;
+
+  /**
+   * @brief oneDNN Arguments for the backward propagation of the gradient wrt normalization
+   */
+  std::unordered_map<int, dnnl::memory> _backwardNormalizationArgs;
+
+  /**
+   * @brief oneDNN primitive for the backward propagation of the gradient wrt normalization
+   */
+  dnnl::primitive _backwardNormalizationPrimitive;
 
 #endif
 };
