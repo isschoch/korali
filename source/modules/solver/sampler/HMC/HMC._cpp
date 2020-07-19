@@ -13,12 +13,6 @@
 #include <gsl/gsl_sort_vector.h>
 #include <gsl/gsl_statistics.h>
 
-/*
-TODO LIST:
-*NUTS algorithm as option
-*calc dU with autmatic differentiation/specified by user
-*/
-
 namespace korali
 {
 namespace solver
@@ -27,14 +21,16 @@ namespace sampler
 {
 void HMC::setInitialConfiguration()
 {
-  //////////////////////////////////////////// My Code: START /////////////////////////////////////////////    
+  // TODO: Check exact intervals (i.e. inclusion and exclusion)
   if (_burnIn < 0) KORALI_LOG_ERROR("Burn In must be larger equal 0 (is %zu).\n", _burnIn);
+  if (_metricEstimateQuotient <= 0.0 || _metricEstimateQuotient > 1.0) KORALI_LOG_ERROR("Metric Estimate Quotient must be in interval (0.0, 1.0] (is %lf).\n", _metricEstimateQuotient);
+  if (_desiredAverageAcceptanceRate <= 0.0 || _desiredAverageAcceptanceRate > 1.0) KORALI_LOG_ERROR("Desired Average Acceptance Rate must be in interval (0.0, 1.0] (is %lf).\n", _desiredAverageAcceptanceRate);
+  if (_targetIntegrationTime < 0.0) KORALI_LOG_ERROR("Target Integration Time must be non-negative (is %lf).\n", _targetIntegrationTime);
   if (_numIntegrationSteps < 1) KORALI_LOG_ERROR("Num Integration Steps must be larger equal 1 (is %zu).\n", _numIntegrationSteps);
 
-  size_t dim = _k->_variables.size();
-  
+  const size_t dim = _k->_variables.size();
+
   // Resizing vectors of internal settings to correct dimensions
-  _choleskyDecompositionMetric.resize(dim * dim);
   _positionLeader.resize(dim);
   _positionCandidate.resize(dim);
   _momentumLeader.resize(dim);
@@ -44,207 +40,226 @@ void HMC::setInitialConfiguration()
   _inverseMetric.resize(dim * dim);
 
   // Filling vectors of internal settings to 0.0
-  std::fill(std::begin(_choleskyDecompositionMetric), std::end(_choleskyDecompositionMetric), 0.0);
   std::fill(std::begin(_metric), std::end(_metric), 0.0);
   std::fill(std::begin(_inverseMetric), std::end(_inverseMetric), 0.0);
-  
-  // Setting position to inital mean, cholesky decomposition
+
+  // Setting position to inital mean
   for (size_t i = 0; i < dim; ++i)
   {
     _positionLeader[i] = _k->_variables[i]->_initialMean;
-    _metric[i*dim + i] = _k->_variables[i]->_initialStandardDeviation * _k->_variables[i]->_initialStandardDeviation;
-    _inverseMetric[i*dim + i] = 1.0 / _metric[i*dim + i];
-    _choleskyDecompositionMetric[i*dim + i] = _k->_variables[i]->_initialStandardDeviation;
+    _metric[i * dim + i] = _k->_variables[i]->_initialStandardDeviation * _k->_variables[i]->_initialStandardDeviation;
+    _inverseMetric[i * dim + i] = 1.0 / _metric[i * dim + i];
   }
 
-  // initialize multivariate normal distribution
+  // Initialize multivariate normal distribution
   std::vector<double> zeroMean(dim, 0.0);
   _multivariateGenerator->_meanVector = zeroMean;
   _multivariateGenerator->_sigma = _metric;
 
-  /* Cholesky Decomp */
+  // Cholesky Decomposition
   gsl_matrix_view sigma = gsl_matrix_view_array(&_multivariateGenerator->_sigma[0], dim, dim);
   gsl_linalg_cholesky_decomp(&sigma.matrix);
 
   _multivariateGenerator->updateDistribution();
 
-  if(_adaptiveTimeStepping == true)
+  if (_useAdaptiveStepSize == true)
   {
     _stepSize = findReasonableStepSize(_positionLeader);
     _mu = std::log(10.0 * _stepSize);
     _hBar = 0.0;
   }
 
-  // Init Generation
+  // Initialize Generation
   _acceptanceCount = 0;
   _proposedSampleCount = 0;
   _chainLength = 0;
   _acceptanceRate = 1.0;
-  //////////////////////////////////////////// My Code: END //////////////////////////////////////////////
+
+  return;
 }
 
 void HMC::runGeneration()
 {
   if (_k->_currentGeneration == 1) setInitialConfiguration();
 
-  bool _sampleAccepted = false;
-
-  /////////////////////////////////////////// My Code: START /////////////////////////////////////////////
+  const size_t dim = _k->_variables.size();
+  double alpha;
 
   // Samples Momentum Candidate from N(0.0, metric)
   generateCandidate();
   // Save old Energies
   _momentumLeader = _momentumCandidate;
-  double K_old = K(_momentumLeader);
-  double U_old = U(_positionLeader);
+  double oldK = K(_momentumLeader);
+  double oldU = U(_positionLeader);
   _positionCandidate = _positionLeader;
 
-  if(_adaptiveTimeStepping == true && _chainLength <= _burnIn)
+  if (_useNUTS == true)
   {
-    _numIntegrationSteps = std::max((size_t) 1, (size_t) (_targetIntegrationTime / _stepSize));
+    std::vector<double> nullPoint1(dim);
+    std::vector<double> nullPoint2(dim);
+    std::vector<double> tmpVector(dim, 0.0);
+
+    std::vector<double> qMinus = _positionLeader;
+    std::vector<double> qPlus = _positionLeader;
+    std::vector<double> pMinus = _momentumLeader;
+    std::vector<double> pPlus = _momentumLeader;
+
+    double oldH = oldU + oldK;
+    double n = 1.0;
+    double nPrime;
+    const double uniSample = _uniformGenerator->getRandomNumber();
+    double uniSamplePrime;
+    double alphaPrime;
+    int nAlphaPrime;
+
+    bool buildCriterion = true;
+    bool buildCriterionPrime;
+    double dotProductMinus, dotProductPlus;
+    int depth = 0;
+
+    while (buildCriterion == true)
+    {
+      uniSamplePrime = _uniformGenerator->getRandomNumber();
+      if (uniSamplePrime < 0.5)
+      {
+        buildTree(qMinus, pMinus, uniSample, -1, depth, _stepSize, oldH, qMinus, pMinus, nullPoint1, nullPoint2, _positionCandidate, nPrime, buildCriterionPrime, alphaPrime, nAlphaPrime);
+      }
+      else
+      {
+        buildTree(qPlus, pPlus, uniSample, 1, depth, _stepSize, oldH, nullPoint1, nullPoint2, qPlus, pPlus, _positionCandidate, nPrime, buildCriterionPrime, alphaPrime, nAlphaPrime);
+      }
+
+      if (buildCriterionPrime == true)
+      {
+        uniSamplePrime = _uniformGenerator->getRandomNumber();
+
+        if (n == 0)
+        {
+          KORALI_LOG_ERROR("Division by zero encountered in NUTS (n is %lf).\n", n);
+        }
+        if (uniSamplePrime < nPrime / n)
+        {
+          _positionLeader = _positionCandidate;
+        }
+      }
+
+      n = n + nPrime;
+
+      std::transform(std::cbegin(qPlus), std::cend(qPlus), std::cbegin(qMinus), std::begin(tmpVector), std::minus<double>());
+      dotProductMinus = std::inner_product(std::cbegin(tmpVector), std::cend(tmpVector), std::cbegin(pMinus), 0.0);
+      dotProductPlus = std::inner_product(std::cbegin(tmpVector), std::cend(tmpVector), std::cbegin(pPlus), 0.0);
+
+      buildCriterion = buildCriterionPrime && (dotProductMinus > 0) && (dotProductPlus > 0);
+
+      ++depth;
+    }
+
+    alpha = alphaPrime / nAlphaPrime;
+    _acceptanceCountNUTS += alpha;
+  }
+  else if (_useNUTS == false)
+  {
+    if (_useAdaptiveStepSize == true && _chainLength <= _burnIn)
+    {
+      _numIntegrationSteps = std::max((size_t)1, (size_t)std::round(_targetIntegrationTime / _stepSize));
+    }
+
+    // Perform Num Integration Steps of Leapfrog scheme to Momentum Candidate and Position Candidate
+    for (size_t i = 0; i < _numIntegrationSteps; ++i)
+    {
+      leapFrogStep(_positionCandidate, _momentumCandidate, _stepSize);
+    }
+
+    // Save new Energies
+    double newK = K(_momentumCandidate);
+    double newU = U(_positionCandidate);
+
+    double uniSample = _uniformGenerator->getRandomNumber();
+    alpha = std::min(1.0, std::exp(-(newK - oldK + newU - oldU)));
+
+    // TODO: Ask why Tobias added constrain (newK + newU) == (newK + newU)
+    if (uniSample <= alpha)
+    {
+      ++_acceptanceCount;
+      _positionLeader = _positionCandidate;
+    }
   }
 
-  // Perform Num Integration Steps of Leapfrog scheme to Momentum Candidate and Position Candidate
-  for(size_t i = 0; i < _numIntegrationSteps; ++i)
-  {
-    leapFrogStep(_positionCandidate, _momentumCandidate, _stepSize);
-  }
-
-  // Save new Energies
-  double K_new = K(_momentumCandidate);
-  double U_new = U(_positionCandidate);
-
-  double u = _uniformGenerator->getRandomNumber();
-  double alpha = std::min(1.0, std::exp(-(K_new - K_old + U_new - U_old)));
-
-  // TODO: Ask why Tobias added constrain (K_new + U_new) == (K_new + U_new)
-  if(u <= alpha)
-  {
-    ++_acceptanceCount;
-    _sampleAccepted = true;
-    _positionLeader = _positionCandidate;
-  }
-
-  if(_chainLength >= _burnIn)
+  // save sample
+  if (_chainLength >= _burnIn)
   {
     _sampleDatabase.push_back(_positionLeader);
   }
-  else if(_useEuclideanMetric == true)
+  else if (_useEuclideanMetric == true)
   {
     _warmupSampleDatabase.push_back(_positionLeader);
   }
 
-  // Update Step Size, Dual Step Size, H Bar for adaptive time stepping
-  if(_adaptiveTimeStepping == true && _chainLength <= _burnIn)
+  // Update Step Size, Dual Step Size, H Bar for Adaptive Step Size option
+  if (_useAdaptiveStepSize == true && _chainLength <= _burnIn)
   {
-    // TODO: Update ugly control flow
-    if(_chainLength < _burnIn)
+    if (_chainLength < _burnIn)
     {
-      // constants for adaptive time stepping
       const double gamma = 0.05;
       const double t_0 = 10.0;
       const double kappa = 0.75;
 
       _hBar = (1.0 - 1.0 / (_chainLength + 1 + t_0)) * _hBar + (_desiredAverageAcceptanceRate - alpha) / (_chainLength + 1 + t_0);
       _stepSize = std::exp((_mu - std::sqrt(_chainLength + 1) / gamma * _hBar));
-      _dualStepSize = std::pow((_stepSize/_dualStepSize), std::pow(_chainLength + 1, -kappa)) * _stepSize;
+      _dualStepSize = std::pow((_stepSize / _dualStepSize), std::pow(_chainLength + 1, -kappa)) * _dualStepSize;
     }
-    else if(_chainLength == _burnIn)
+    else if (_chainLength == _burnIn)
     {
       _stepSize = _dualStepSize;
     }
   }
 
-
-  //////////////////////////////////////////// My Code: END //////////////////////////////////////////////
-  ++_chainLength;
   updateState();
-}
+  ++_chainLength;
 
-// TODO: REMOVE
-void HMC::choleskyDecomp(const std::vector<double> &inC, std::vector<double> &outL) const
-{
-  gsl_matrix *A = gsl_matrix_alloc(_k->_variables.size(), _k->_variables.size());
-
-  for (size_t d = 0; d < _k->_variables.size(); ++d)
-    for (size_t e = 0; e < d; ++e)
-    {
-      gsl_matrix_set(A, d, e, inC[d * _k->_variables.size() + e]);
-      gsl_matrix_set(A, e, d, inC[e * _k->_variables.size() + d]);
-    }
-  for (size_t d = 0; d < _k->_variables.size(); ++d) gsl_matrix_set(A, d, d, inC[d * _k->_variables.size() + d]);
-
-  int err = gsl_linalg_cholesky_decomp1(A);
-
-  if (err == GSL_EDOM)
-  {
-    _k->_logger->logWarning("Normal", "Chain Covariance negative definite (not updating Cholesky Decomposition of Chain Covariance).\n");
-  }
-  else
-  {
-    for (size_t d = 0; d < _k->_variables.size(); ++d)
-      for (size_t e = 0; e < d; ++e)
-      {
-        outL[d * _k->_variables.size() + e] = gsl_matrix_get(A, d, e);
-      }
-    for (size_t d = 0; d < _k->_variables.size(); ++d) outL[d * _k->_variables.size() + d] = gsl_matrix_get(A, d, d);
-  }
-
-  gsl_matrix_free(A);
+  return;
 }
 
 void HMC::generateCandidate()
 {
-  /////////////////////////////////////////// My Code: START /////////////////////////////////////////////
-  _proposedSampleCount++;
-  
-  size_t dim = _k->_variables.size();
+  ++_proposedSampleCount;
+  const size_t dim = _k->_variables.size();
   // saple momentum p from p ~ N(0.0, metric)
-  
-  // Original implementation according to MCMC
-  // for(size_t d = 0; d < dim; ++d)
-  // {
-  //   _momentumCandidate[d] = 0;
-  //   for(size_t e = 0; e < d+1; ++e)
-  //   {
-  //     _momentumCandidate[d] += _choleskyDecompositionMetric[d*dim + e] * _normalGenerator->getRandomNumber();
-  //   }
-  // }
-  
-  // new implementation according to TMC
   _multivariateGenerator->getRandomVector(&_momentumCandidate[0], dim);
-  //////////////////////////////////////////// My Code: END //////////////////////////////////////////////
+
+  return;
 }
 
 void HMC::updateState()
 {
-  /////////////////////////////////////////// My Code: START /////////////////////////////////////////////
-  _acceptanceRate = ((double)_acceptanceCount / (double)_chainLength);
-  size_t dim = _k->_variables.size();
+  _acceptanceRate = _useNUTS == true ? (double)_acceptanceCountNUTS / ((double)_chainLength + 1) : (double)_acceptanceCount / ((double)(_chainLength + 1));
+
+  const size_t dim = _k->_variables.size();
 
   // case: sample phase
-  if(_chainLength >= _burnIn)
+  if (_chainLength >= _burnIn)
   {
     // return if no samples available
-    if (_sampleDatabase.size() == 0) 
+    if (_sampleDatabase.size() == 0)
     {
       return;
     }
-    
+
     // for one sample simply set average to current value (to avoid dividing by zero)
     if (_sampleDatabase.size() == 1)
     {
-      for (size_t d = 0; d < dim; d++) 
+      for (size_t d = 0; d < dim; ++d)
       {
         _positionMean[d] = _positionLeader[d];
       }
+
       return;
     }
 
     // calculate chain mean for > 1 sample
-    if(_sampleDatabase.size() > 1)
+    if (_sampleDatabase.size() > 1)
     {
-      for (size_t d = 0; d < dim; d++)
+      for (size_t d = 0; d < dim; ++d)
       {
         _positionMean[d] = (_positionMean[d] * (_sampleDatabase.size() - 1) + _positionLeader[d]) / _sampleDatabase.size();
       }
@@ -254,25 +269,26 @@ void HMC::updateState()
   else
   {
     // return if no samples available
-    if (_warmupSampleDatabase.size() == 0) 
+    if (_warmupSampleDatabase.size() == 0)
     {
       return;
     }
-    
+
     // for one sample simply set average to current value (to avoid dividing by zero)
     if (_warmupSampleDatabase.size() == 1)
     {
-      for (size_t d = 0; d < dim; d++) 
+      for (size_t d = 0; d < dim; ++d)
       {
         _positionMean[d] = _positionLeader[d];
       }
+
       return;
     }
 
     // calculate chain mean for > 1 sample
-    if(_warmupSampleDatabase.size() > 1)
+    if (_warmupSampleDatabase.size() > 1)
     {
-      for (size_t d = 0; d < dim; d++)
+      for (size_t d = 0; d < dim; ++d)
       {
         _positionMean[d] = (_positionMean[d] * (_warmupSampleDatabase.size() - 1) + _positionLeader[d]) / _warmupSampleDatabase.size();
       }
@@ -280,36 +296,35 @@ void HMC::updateState()
 
     // case: Use Adaptive Sampling = True
     //       Approximate Inverse Matrix via Fisher Information
-    if(_useEuclideanMetric == true && (int)(0.7 * _burnIn) == _chainLength)
+    if (_useEuclideanMetric == true && (int)(_metricEstimateQuotient * (double)_burnIn) == _chainLength + 1)
     {
       double sum;
       size_t numWarmupSamples = _warmupSampleDatabase.size();
 
       // calculate covariance matrix of warmup sample via Fisher Infromation
-      for(size_t i = 0; i < dim; ++i)
+      for (size_t i = 0; i < dim; ++i)
       {
-        for(size_t k = i; k < dim; ++k)
+        for (size_t k = i; k < dim; ++k)
         {
           sum = 0;
-          for(size_t j = 0; j < numWarmupSamples; ++j)
+          for (size_t j = 0; j < numWarmupSamples; ++j)
           {
             sum += (_warmupSampleDatabase[j][i] - _positionMean[i]) * (_warmupSampleDatabase[j][k] - _positionMean[k]);
           }
-          _inverseMetric[i*dim + k] = sum / (numWarmupSamples - 1);
-          _inverseMetric[k*dim + i] = _inverseMetric[i*dim + k];
+          _inverseMetric[i * dim + k] = sum / (numWarmupSamples - 1);
+          _inverseMetric[k * dim + i] = _inverseMetric[i * dim + k];
         }
-      }    
+      }
 
       // update Metric to be consisitent with Inverse Metric
       invertMatrix(_inverseMetric, _metric);
 
-      // TODO: CHANGE BACK TO _METRIC
       _multivariateGenerator->_sigma = _metric;
       // /* Cholesky Decomp */
       gsl_matrix_view sigma = gsl_matrix_view_array(&_multivariateGenerator->_sigma[0], dim, dim);
 
       int err = gsl_linalg_cholesky_decomp(&sigma.matrix);
-      if(err == GSL_EDOM)
+      if (err == GSL_EDOM)
       {
         _k->_logger->logWarning("Normal", "Metric negative definite (not updating Metric used for sampling momentum).\n");
       }
@@ -317,30 +332,15 @@ void HMC::updateState()
       {
         _multivariateGenerator->updateDistribution();
       }
-
     }
   }
-  //////////////////////////////////////////// My Code: END //////////////////////////////////////////////
+
+  return;
 }
 
-void HMC::printGenerationBefore() 
+void HMC::printGenerationBefore()
 {
-
-  if(_adaptiveTimeStepping == true)
-  {
-    // Chain Length + 1 = m in Algorithm
-    _k->_logger->logInfo("Detailed", "Chain Length: %ld\n", _chainLength);
-    // Step Size
-    _k->_logger->logInfo("Detailed", "Step Size: %lf\n", _stepSize);
-    // Dual Step Size
-    _k->_logger->logInfo("Detailed", "Dual Step Size: %lf\n", _dualStepSize);
-    // Num Integration Steps
-    _k->_logger->logInfo("Detailed", "Num Integration Steps: %ld\n", _numIntegrationSteps);
-    // Dual Step Size
-    _k->_logger->logInfo("Detailed", "H Bar: %lf\n", _hBar);
-  }
-    
-  return; 
+  return;
 }
 
 void HMC::printGenerationAfter()
@@ -348,48 +348,49 @@ void HMC::printGenerationAfter()
   // Number of Samples
   _k->_logger->logInfo("Minimal", "Database Entries %ld\n", _sampleDatabase.size());
 
-  // Number of Accepted Samples
-  _k->_logger->logInfo("Normal", "Accepted Samples: %zu\n", _acceptanceCount);
+  _useNUTS == true ? _k->_logger->logInfo("Detailed", "Accepted Samples Indicator (NUTS): %lf\n", _acceptanceCountNUTS) : _k->_logger->logInfo("Normal", "Accepted Samples: %zu\n", _acceptanceCount);
+
   _k->_logger->logInfo("Normal", "Acceptance Rate Proposals: %.2f%%\n", 100 * _acceptanceRate);
 
   // Current Sample
   _k->_logger->logInfo("Detailed", "Current Sample:\n");
-  for (size_t d = 0; d < _k->_variables.size(); d++) _k->_logger->logData("Detailed", "         %s = %+6.3e\n", _k->_variables[d]->_name.c_str(), _positionLeader[d]);
+  for (size_t d = 0; d < _k->_variables.size(); ++d) _k->_logger->logData("Detailed", "         %s = %+6.3e\n", _k->_variables[d]->_name.c_str(), _positionLeader[d]);
 
   // TODO: Give better name
   // Current Sample/Position Mean
   _k->_logger->logInfo("Detailed", "Current Position Mean:\n");
-  for (size_t d = 0; d < _k->_variables.size(); d++) _k->_logger->logData("Detailed", "         %s = %+6.3e\n", _k->_variables[d]->_name.c_str(), _positionMean[d]);
+  for (size_t d = 0; d < _k->_variables.size(); ++d) _k->_logger->logData("Detailed", "         %s = %+6.3e\n", _k->_variables[d]->_name.c_str(), _positionMean[d]);
   _k->_logger->logInfo("Detailed", "Current Metric:\n");
-
-  // Metric
-  for (size_t d = 0; d < _k->_variables.size(); d++)
-  {
-    for (size_t e = 0; e < _k->_variables.size(); e++) _k->_logger->logData("Detailed", "         %+6.3e  ", _metric[d * _k->_variables.size() + e]);
-    _k->_logger->logInfo("Detailed", "\n");
-  }
 
   // Inverse Metric
   _k->_logger->logInfo("Detailed", "Current Inverse Metric:\n");
-  for (size_t d = 0; d < _k->_variables.size(); d++)
+  for (size_t d = 0; d < _k->_variables.size(); ++d)
   {
-    for (size_t e = 0; e < _k->_variables.size(); e++) _k->_logger->logData("Detailed", "         %+6.3e  ", _inverseMetric[d * _k->_variables.size() + e]);
+    for (size_t e = 0; e < _k->_variables.size(); ++e) _k->_logger->logData("Detailed", "         %+6.3e  ", _inverseMetric[d * _k->_variables.size() + e]);
     _k->_logger->logInfo("Detailed", "\n");
   }
 
-  if(_adaptiveTimeStepping == true)
+  // Chain Length + 1 = m in Algorithm
+  _k->_logger->logInfo("Detailed", "Chain Length: %ld\n", _chainLength);
+
+  if (_useAdaptiveStepSize == true)
   {
-    // Chain Length + 1 = m in Algorithm
-    _k->_logger->logInfo("Detailed", "Chain Length: %ld\n", _chainLength);
     // Step Size
     _k->_logger->logInfo("Detailed", "Step Size: %lf\n", _stepSize);
     // Dual Step Size
     _k->_logger->logInfo("Detailed", "Dual Step Size: %lf\n", _dualStepSize);
-    // Num Integration Steps
-    _k->_logger->logInfo("Detailed", "Num Integration Steps: %ld\n", _numIntegrationSteps);
+
+    if (_useNUTS == false)
+    {
+      // Num Integration Steps
+      _k->_logger->logInfo("Detailed", "Num Integration Steps: %ld\n", _numIntegrationSteps);
+    }
+
     // Dual Step Size
     _k->_logger->logInfo("Detailed", "H Bar: %lf\n", _hBar);
   }
+
+  return;
 }
 
 void HMC::finalize()
@@ -398,133 +399,118 @@ void HMC::finalize()
   _k->_logger->logInfo("Minimal", "Acceptance Rate: %.2f%%\n", 100 * _acceptanceRate);
   if (_sampleDatabase.size() == _maxSamples) _k->_logger->logInfo("Minimal", "Max Samples Reached.\n");
   (*_k)["Results"]["Sample Database"] = _sampleDatabase;
+
+  return;
 }
 
-/////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-//////////////////////////////////////////////// My Functions: START ////////////////////////////////////////////////
-/////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-double HMC::K(std::vector<double> p)
+double HMC::K(const std::vector<double> &p) const
 {
-  size_t dim = _k->_variables.size();
-  double result = 0.0;
-  
-  for(size_t i = 0; i < dim; ++i)
+  const size_t dim = _k->_variables.size();
+  double tmpScalar = 0.0;
+
+  for (size_t i = 0; i < dim; ++i)
   {
-    for(size_t j = 0; j < dim; ++j)
+    for (size_t j = 0; j < dim; ++j)
     {
-      result = result + p[i] * _inverseMetric[i*dim + j] * p[j];
+      tmpScalar = tmpScalar + p[i] * _inverseMetric[i * dim + j] * p[j];
     }
   }
-  result = 0.5 * result;
+  tmpScalar = 0.5 * tmpScalar;
 
-  return result;
+  return tmpScalar;
 }
 
-std::vector<double> HMC::dK(std::vector<double> p)
+std::vector<double> HMC::dK(const std::vector<double> &p) const
 {
-  size_t dim = _k->_variables.size();
-  std::vector<double> result(dim, 0.0);
+  const size_t dim = _k->_variables.size();
+  std::vector<double> tmpVector(dim, 0.0);
   double sum = 0.0;
 
-  for(size_t i = 0; i < dim; ++i)
+  for (size_t i = 0; i < dim; ++i)
   {
     sum = 0.0;
-    for(size_t j = 0; j < dim; ++j)
+    for (size_t j = 0; j < dim; ++j)
     {
-      sum = sum + _inverseMetric[i*dim + j] * p[j];
+      sum = sum + _inverseMetric[i * dim + j] * p[j];
     }
-    result[i] = sum;
+    tmpVector[i] = sum;
   }
 
-  return result;
+  return tmpVector;
 }
 
-double HMC::U(std::vector<double> q)
+double HMC::U(const std::vector<double> &q)
 {
+  // get sample
   auto sample = Sample();
-
-  _modelEvaluationCount++;
+  ++_modelEvaluationCount;
   sample["Parameters"] = q;
   sample["Sample Id"] = _sampleDatabase.size();
   sample["Module"] = "Problem";
   sample["Operation"] = "Evaluate";
   _conduit->start(sample);
   _conduit->wait(sample);
+  // evaluate logP(x)
+  double evaluation = KORALI_GET(double, sample, "logP(x)");
 
-  // change to logP(x)
-  double evaluation = -KORALI_GET(double, sample, "P(x)");
+  // negate to get U
+  evaluation *= -1.0;
 
   return evaluation;
 }
 
-std::vector<double> HMC::dU(std::vector<double> q)
+std::vector<double> HMC::dU(const std::vector<double> &q)
 {
-  size_t dim = _k->_variables.size();
-  // TODO:Implement dU
+  const size_t dim = _k->_variables.size();
 
-  // TODO: REMOVE: Hardcoding gradient of U
-  std::vector<double> result = q;
+  // get sample
+  auto sample = Sample();
+  ++_modelEvaluationCount;
+  sample["Parameters"] = q;
+  sample["Sample Id"] = _sampleDatabase.size();
+  sample["Module"] = "Problem";
+  sample["Operation"] = "Evaluate Gradient";
+  _conduit->start(sample);
+  _conduit->wait(sample);
+  // evaluate grad(logP(x)) (extremely slow)
+  std::vector<double> evaluation = KORALI_GET(std::vector<double>, sample, "grad(logP(x))");
 
-  // WARNING: POTENTIAL ERROR SOURCE
-  // for(size_t i = 0; i < q.size(); ++i) result[i] /= 5.;
+  // negate to get dU
+  std::transform(evaluation.cbegin(), evaluation.cend(), evaluation.begin(), std::negate<double>());
 
-  std::vector<double> cov(dim*dim, 0.0);
-
-  // make sure it is consistent with HMC::dU
-  cov[0] = 1.0;
-  cov[1] = -0.5;
-  cov[2] = -0.5;
-  cov[3] = 1.0;
-
-  std::vector<double> inverseCov(dim*dim, 0.0);
-  invertMatrix(cov, inverseCov);
-
-  double sum = 0.0;
-
-  for(size_t i = 0; i < dim; ++i)
-  {
-    sum = 0.0;
-    for(size_t j = 0; j < dim; ++j)
-    {
-      sum = sum + inverseCov[i*dim + j] * q[j];
-    }
-    result[i] = sum;
-  }
-
-  return result;
+  return evaluation;
 }
 
-void HMC::leapFrogStep(std::vector<double>& q, std::vector<double>& p, const double stepSize)
+void HMC::leapFrogStep(std::vector<double> &q, std::vector<double> &p, const double stepSize)
 {
-  size_t dim = _k->_variables.size();
-  
+  const size_t dim = _k->_variables.size();
+
   std::vector<double> dU = HMC::dU(q);
-  // std::vector<double> dU = -KORALI_GET(std::vector<double>, theta, "dlogP(x)");
-  for(size_t i = 0; i < dim; ++i)
+  for (size_t i = 0; i < dim; ++i)
   {
     p[i] = p[i] - 0.5 * stepSize * dU[i];
   }
-  
-  // std::vector<double> dK = std::vector<double> (dim, 0.);
+
   std::vector<double> dK = HMC::dK(p);
-  for(size_t i = 0; i < dim; ++i)
+  for (size_t i = 0; i < dim; ++i)
   {
     q[i] = q[i] + stepSize * dK[i];
   }
 
-  // dU = std::vector<double> (dim, 0.);
   dU = HMC::dU(q);
-  for(size_t i = 0; i < dim; ++i)
+  for (size_t i = 0; i < dim; ++i)
   {
-    p[i] = p[i] - 0.5 * stepSize * dU[i]; 
+    p[i] = p[i] - 0.5 * stepSize * dU[i];
   }
+
+  return;
 }
 
 // inverts mat via cholesky decomposition and writes inverted Matrix to inverseMat
 // TODO: Avoid calculating cholesky decompisition twice
-void HMC::invertMatrix(std::vector<double>& mat, std::vector<double>& inverseMat)
+void HMC::invertMatrix(std::vector<double> &mat, std::vector<double> &inverseMat)
 {
-  size_t dim = _k->_variables.size();
+  const size_t dim = _k->_variables.size();
   gsl_matrix *A = gsl_matrix_alloc(dim, dim);
 
   // copy mat to gsl matrix
@@ -537,14 +523,12 @@ void HMC::invertMatrix(std::vector<double>& mat, std::vector<double>& inverseMat
     }
     gsl_matrix_set(A, d, d, mat[d * dim + d]);
   }
-  
   // calculate cholesky decomposition
   int err = gsl_linalg_cholesky_decomp(A);
   if (err == GSL_EDOM)
   {
     // error handling for non s.p.d. matrices
-    // TODO: extend error message with recomendation to increase number of samples
-    _k->_logger->logWarning("Normal", "Inverse Metric negative definite (not updating Metric).\n");
+    _k->_logger->logWarning("Normal", "Inverse Metric negative definite (not updating Metric). Try Increasing Burn In.\n");
   }
   else
   {
@@ -557,10 +541,10 @@ void HMC::invertMatrix(std::vector<double>& mat, std::vector<double>& inverseMat
     {
       for (size_t e = 0; e < d; ++e)
       {
-        inverseMat[d*dim + e] = gsl_matrix_get(A, d, e);
-        inverseMat[e*dim + d] = gsl_matrix_get(A, d, e);
+        inverseMat[d * dim + e] = gsl_matrix_get(A, d, e);
+        inverseMat[e * dim + d] = gsl_matrix_get(A, d, e);
       }
-      inverseMat[d*dim + d] = gsl_matrix_get(A, d, d);
+      inverseMat[d * dim + d] = gsl_matrix_get(A, d, d);
     }
   }
 
@@ -571,41 +555,33 @@ void HMC::invertMatrix(std::vector<double>& mat, std::vector<double>& inverseMat
 
 double HMC::findReasonableStepSize(std::vector<double> q)
 {
-  size_t dim = _k->_variables.size();
+  const size_t dim = _k->_variables.size();
   double stepSize = 1.0;
   double oldLogP, newLogP;
 
   std::vector<double> p(dim, 0.0);
 
   // TODO: decide on sampling with metric as covariance metric or identity
-  
+
   // Sampling from Normal distribution with metric as covariance matrix
   // WARNING: MY INTERPRETATION
-  _multivariateGenerator->getRandomVector(&p[0], dim);
-  
+  // _multivariateGenerator->getRandomVector(&p[0], dim);
+
   // Sampling from Standard Normal Distributoin (Identity as covariance matrix)
-  // for(size_t i = 0; i < dim; ++i)
-  // {
-  //   p[i] = _normalGenerator->getRandomNumber();
-  // }
+  for (size_t i = 0; i < dim; ++i)
+  {
+    p[i] = _normalGenerator->getRandomNumber();
+  }
 
   oldLogP = -(K(p) + U(q));
 
   leapFrogStep(q, p, stepSize);
   newLogP = -(K(p) + U(q));
 
-  int a = 1;
-  if(newLogP - oldLogP > std::log(0.5))
-  {
-    a = 1;
-  }
-  else
-  {
-    a = -1;
-  }
+  int a = (newLogP - oldLogP > std::log(0.5)) ? 1 : -1;
 
   // TODO: Ask why Tobias updates oldLogP as this is not what Algorithm 5 says
-  while(std::pow(std::exp(newLogP - oldLogP), a) > std::pow(2, -a))
+  while (std::pow(std::exp(newLogP - oldLogP), a) > std::pow(2, -a))
   {
     stepSize = std::pow(2, a) * stepSize;
 
@@ -617,16 +593,87 @@ double HMC::findReasonableStepSize(std::vector<double> q)
   }
 
   // Catch Step Size = 0.0 -> No traversal of phase space
-  if(stepSize <= 0.0) 
+  if (stepSize <= 0.0)
   {
     KORALI_LOG_ERROR("Failed to find reasonable Step Size. Step Size is %+6.3e.\n", _stepSize);
   }
 
   return stepSize;
 }
-/////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-///////////////////////////////////////////////// My Functions: END /////////////////////////////////////////////////
-/////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+void HMC::buildTree(const std::vector<double> &q, const std::vector<double> &p, const double uniSample, const int direction, const int depth, const double stepSize, const double oldH, std::vector<double> &qMinus, std::vector<double> &pMinus, std::vector<double> &qPlus, std::vector<double> &pPlus, std::vector<double> &qPrime, double &nPrime, bool &buildCriterionPrime, double &alphaPrime, int &nAlphaPrime)
+{
+  const size_t dim = _k->_variables.size();
+
+  bool sDoublePrime;
+  double dotProductMinus, dotProductPlus, nDoublePrime, uniSamplePrime, alpha2, KPrime, UPrime, HPrime;
+  int nAlpha2;
+  double deltaMax = 100;
+
+  std::vector<double> nullPoint1(dim);
+  std::vector<double> nullPoint2(dim);
+  std::vector<double> qDoublePrime(dim, 0.0);
+  std::vector<double> tmpVector(dim, 0.0);
+
+  qMinus = q;
+  pMinus = p;
+  if (depth == 0)
+  {
+    leapFrogStep(qMinus, pMinus, direction * stepSize);
+    KPrime = K(pMinus);
+    UPrime = U(qMinus);
+    HPrime = UPrime + KPrime;
+
+    nPrime = 0;
+    if (uniSample <= std::exp(oldH - HPrime))
+    {
+      nPrime = 1;
+    }
+
+    // buildCriterionPrime indicates error of simulation -> setting to false signals to stop building tree
+    buildCriterionPrime = (-HPrime > -(oldH + deltaMax));
+    alphaPrime = std::min(1.0, std::exp(oldH - HPrime));
+    nAlphaPrime = 1;
+    qPlus = qMinus;
+    qPrime = qMinus;
+    pPlus = pMinus;
+  }
+  else
+  {
+    buildTree(q, p, uniSample, direction, depth - 1, stepSize, oldH, qMinus, pMinus, qPlus, pPlus, qPrime, nPrime, buildCriterionPrime, alphaPrime, nAlphaPrime);
+
+    if (buildCriterionPrime == true)
+    {
+      if (direction == -1)
+      {
+        buildTree(qMinus, pMinus, uniSample, direction, depth - 1, stepSize, oldH, qMinus, pMinus, nullPoint1, nullPoint2, qDoublePrime, nDoublePrime, sDoublePrime, alpha2, nAlpha2);
+      }
+      else
+      {
+        buildTree(qPlus, pPlus, uniSample, direction, depth - 1, stepSize, oldH, nullPoint1, nullPoint2, qPlus, pPlus, qDoublePrime, nDoublePrime, sDoublePrime, alpha2, nAlpha2);
+      }
+      uniSamplePrime = _uniformGenerator->getRandomNumber();
+
+      // if(uniSamplePrime < acceptProbability)
+      if (nDoublePrime != 0 && uniSamplePrime < nDoublePrime / (nPrime + nDoublePrime))
+      {
+        qPrime = qDoublePrime;
+      }
+      nPrime = nPrime + nDoublePrime;
+      alphaPrime = alphaPrime + alpha2;
+      nAlphaPrime = nAlphaPrime + nAlpha2;
+
+      std::transform(std::cbegin(qPlus), std::cend(qPlus), std::cbegin(qMinus), std::begin(tmpVector), std::minus<double>());
+      dotProductMinus = std::inner_product(std::cbegin(tmpVector), std::cend(tmpVector), std::cbegin(pMinus), 0.0);
+      dotProductPlus = std::inner_product(std::cbegin(tmpVector), std::cend(tmpVector), std::cbegin(pPlus), 0.0);
+
+      buildCriterionPrime = sDoublePrime && (dotProductMinus > 0) && (dotProductPlus > 0);
+    }
+  }
+
+  return;
+}
+
 } // namespace sampler
 
 } // namespace solver

@@ -2,9 +2,9 @@
 #define _KORALI_SOLVER_HMC_HPP_
 
 // TODO: REMOVE normal/normal.hpp
+#include "modules/distribution/multivariate/normal/normal.hpp"
 #include "modules/distribution/univariate/normal/normal.hpp"
 #include "modules/distribution/univariate/uniform/uniform.hpp"
-#include "modules/distribution/multivariate/normal/normal.hpp"
 #include "modules/solver/sampler/sampler.hpp"
 #include <vector>
 
@@ -18,15 +18,7 @@ class HMC : public Sampler
 {
   private:
   /**
-  * @brief Calculates recursively acceptance probability. Recursion required for Delayed Rejection.
-  * @param denominator denominator of quotient (acceptance probability)
-  * @param leaderLoglikelihood loglikelihood of current chain leader
-  * @param loglikelihoods loglikelihoods of samples obtained after delay
-  * @param N rescursion depth
-  */
-
-  /**
-  * @brief Updates internal state such as mean and covariance of chain.
+  * @brief Updates internal state such as mean, Metric and InverseMetric.
   */
   void updateState();
 
@@ -34,11 +26,6 @@ class HMC : public Sampler
   * @brief Generate new sample.
   */
   void generateCandidate();
-
-  /**
-  * @brief Cholesky decomposition of chain covariance matrix.
-  */
-  void choleskyDecomp(const std::vector<double> &inC, std::vector<double> &outL) const;
 
   /**
   * @brief Process sample after evaluation.
@@ -70,20 +57,77 @@ class HMC : public Sampler
   * @brief Console output after generation.
   */
   void printGenerationAfter() override;
-    
-  ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-  /////////////////////////////////////////////// My Functions: START ///////////////////////////////////////////////
-  ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-  double K(std::vector<double> p);
-  std::vector<double> dK(std::vector<double> p);
-  double U(std::vector<double> q);
-  std::vector<double> dU(std::vector<double> q);
-  void leapFrogStep(std::vector<double>& q, std::vector<double>& p, const double stepSize);
-  void invertMatrix(std::vector<double>& mat, std::vector<double>& inverseMat);
+
+  /**
+  * @brief Kinetic energy used for Hamiltonian Dynamics.
+  * @param p Current momentum.
+  * @return Kinetic energy with current momentum.
+  */
+  double K(const std::vector<double> &p) const;
+
+  /**
+  * @brief Gradient of kinetic energy used for Hamiltonian Dynamics.
+  * @param p Current momentum.
+  * @return Gradient of kinetic energy with current momentum.
+  */
+  std::vector<double> dK(const std::vector<double> &p) const;
+
+  /**
+  * @brief Potential energy used for Hamiltonian Dynamics with relation U(x) = -logP(x).
+  * @param q Current position.
+  * @return Potential energy with current position.
+  */
+  double U(const std::vector<double> &q);
+
+  /**
+  * @brief Gradient of potential energy used for Hamiltonian Dynamics with relation grad(U(x)) = -grad(logP(x)).
+  * @param q Current position.
+  * @return Gradent of potential energy with current position.
+  */
+  std::vector<double> dU(const std::vector<double> &q);
+
+  /**
+  * @brief Leapfrog stepping scheme used for evolving Hamiltonian Dynamics.
+  * @param q Position which is evolved.
+  * @param p Momentum which is evolved.
+  * @param stepSize Step Size used for Leap Frog Scheme.
+  */
+  void leapFrogStep(std::vector<double> &q, std::vector<double> &p, const double stepSize);
+
+  /**
+  * @brief Inverts matrix in first argument. Solution is given in second argument. Used for Euclidean Metric as Metric has to be calculated from InverseMetric.
+  * @param mat Input matrix.
+  * @param inverseMat Output matrix which is mat^(-1).
+  */
+  void invertMatrix(std::vector<double> &mat, std::vector<double> &inverseMat);
+
+  /**
+  * @brief Finds reasonable Step Size. Used if Use Adaptive Time Stepping is set to True.
+  * @param q Current position.
+  * @return The reasonable Step Size found by algorithm.
+  */
   double findReasonableStepSize(std::vector<double> q);
-  ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-  //////////////////////////////////////////////// My Functions: END ////////////////////////////////////////////////
-  ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+  /**
+  * @brief Recursive binary tree building algorithm. Used if Use NUTS is set to True.
+  * @param q Current Position.
+  * @param p Current Momentum.
+  * @param uniSample Sample from [0.0, 1.0).
+  * @param direction Direction in which Hamiltonian Dynamics are evolved (either 1 or -1).
+  * @param depth Depth of binary tree recursion.
+  * @param stepSize Step Size used for integration scheme (Leap Frog).
+  * @param oldH Original total energy from starting position.
+  * @param qMinus Leftmost leaf of binary tree (position).
+  * @param pMinus Leftmost leaf of binary tree (momentum).
+  * @param qPlus Rightmost leaf of binary tree (positon).
+  * @param pPlus Rightmost leaf of binary tree (momentum).
+  * @param qPrime Newly visited position state.
+  * @param nPrime Auxiliary variable needed for computation of acceptance probability.
+  * @param buildCriterionPrime Indicates if binary tree should be built further, i.e. if it is false a U-Turn has been found or the error has grown to be too large.
+  * @param alphaPrime Auxiliary variable needed for Adaptive Step Size.
+  * @param nAlphaPrime Auxiliary variable needed for Adaptive Step Size.
+  */
+  void buildTree(const std::vector<double> &q, const std::vector<double> &p, const double uniSample, const int direction, const int depth, const double stepSize, const double oldH, std::vector<double> &qMinus, std::vector<double> &pMinus, std::vector<double> &qPlus, std::vector<double> &pPlus, std::vector<double> &qPrime, double &nPrime, bool &buildCriterionPrime, double &alphaPrime, int &nAlphaPrime);
 };
 
 } // namespace sampler

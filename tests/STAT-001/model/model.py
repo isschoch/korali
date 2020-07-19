@@ -7,5 +7,6 @@ def model(s):
   v = s["Parameters"][0]
   r = -0.5 * v * v
   s["F(x)"] = r
-  s["P(x)"] = r
+  s["logP(x)"] = r
   s["logLikelihood"] = r
+  s["grad(logP(x))"] = [-v]

@@ -87,7 +87,7 @@ void GaussianProcess::runSample(Sample &sample, libgp::GaussianProcess *gp)
   gp->covf().set_loghyper(p);
 
   sample["F(x)"] = gp->log_likelihood();
-  sample["P(x)"] = sample["F(x)"];
+  sample["logP(x)"] = sample["F(x)"];
 
   Eigen::VectorXd eigenGrad = gp->log_likelihood_gradient();
   for (size_t i = 0; i < gpParameterDimension; i++)

@@ -67,7 +67,7 @@ class MCMCLatentSampler:
       _sValues = s["S"]
       _phiValues = s["phi"]
       logP_of_x = -_zetaValue + np.inner(_sValues, _phiValues)
-      s["P(x)"] = logP_of_x
+      s["logP(x)"] = logP_of_x
 
     # * * * * *  * * * * *  * * * * * probability_function end
 

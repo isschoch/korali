@@ -9,7 +9,7 @@ def model(s):
   x = s["Parameters"][0]
   r = -0.5 * x * x
   s["F(x)"] = r
-  s["P(x)"] = r
+  s["logP(x)"] = r
 
 
 # Function and Gradient function evaluation

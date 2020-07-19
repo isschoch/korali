@@ -14,10 +14,16 @@ class Sampling : public korali::Problem
   void initialize() override;
 
   /**
-   * @brief Evaluates the probability density (P(x)) of the function at the given parameters.
+   * @brief Evaluates the logarithm of probability density (logP(x)) of the function at the given parameters.
    * @param sample Sample to evaluate
    */
   virtual void evaluate(korali::Sample &sample);
+
+  /**
+   * @brief Evaluates the gradient of logarithm probability density (grad(logP(x))) of the function at the given parameters.
+   * @param sample Sample to evaluate
+   */
+  virtual void evaluateGradient(korali::Sample &sample);
 };
 
 } // namespace problem
