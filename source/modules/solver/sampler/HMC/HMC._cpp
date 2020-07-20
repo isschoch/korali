@@ -104,7 +104,7 @@ void HMC::runGeneration()
     std::vector<double> pMinus = _momentumLeader;
     std::vector<double> pPlus = _momentumLeader;
 
-    double oldH = oldU + oldK;
+    const double oldH = oldU + oldK;
     double n = 1.0;
     double nPrime;
     const double uniSample = _uniformGenerator->getRandomNumber();
@@ -171,8 +171,8 @@ void HMC::runGeneration()
     }
 
     // Save new Energies
-    double newK = K(_momentumCandidate);
-    double newU = U(_positionCandidate);
+    const double newK = K(_momentumCandidate);
+    const double newU = U(_positionCandidate);
 
     double uniSample = _uniformGenerator->getRandomNumber();
     alpha = std::min(1.0, std::exp(-(newK - oldK + newU - oldU)));
